@@ -14,33 +14,15 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
-# Configuração de CORS
-CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "http://127.0.0.1:5500",
-            "http://localhost:5500",
-            "https://5000-iv0enkxgl79ezbzqdoazj-9604ece9.manusvm.computer",
-            "http://127.0.0.1:5000"
-        ],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Type", "Content-Disposition"],
-        "supports_credentials": True,
-        "max_age": 86400
-    }
-})
-
-# Manipulação explícita de requisições OPTIONS
-@app.route('/api/<path:path>', methods=['OPTIONS'])
-def options(path):
-    logger.debug(f"Requisição OPTIONS recebida para /api/{path} de origem {request.headers.get('Origin')}")
-    return '', 200, {
-        'Access-Control-Allow-Origin': request.headers.get('Origin', '*'),
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400'
-    }
+# Configuração de CORS simplificada.
+# Permite que o frontend em desenvolvimento (ex: porta 5500) e o frontend
+# em produção no Render acessem a API.
+origins = [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "https://sistema-manutencao-v2.onrender.com"
+]
+CORS(app, resources={r"/api/*": {"origins": origins}})
 
 # Rota de teste para verificar conectividade
 @app.route('/api/test', methods=['GET'])

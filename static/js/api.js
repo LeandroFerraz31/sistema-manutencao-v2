@@ -1,4 +1,8 @@
-const API_BASE_URL = 'http://127.0.0.1:5000';
+
+// Ao usar um caminho relativo (string vazia), o navegador automaticamente usará
+// o domínio atual. Isso funciona tanto para http://127.0.0.1:5000 (local)
+// quanto para https://sistema-manutencao-v2.onrender.com (produção).
+const API_BASE_URL = '';
 
 axios.defaults.baseURL = API_BASE_URL;
 axios.defaults.timeout = 30000;
