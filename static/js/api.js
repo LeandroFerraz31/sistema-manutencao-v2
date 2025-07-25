@@ -1,8 +1,15 @@
 
-// Ao usar um caminho relativo (string vazia), o navegador automaticamente usará
-// o domínio atual. Isso funciona tanto para http://127.0.0.1:5000 (local)
-// quanto para https://sistema-manutencao-v2.onrender.com (produção).
-const API_BASE_URL = '';
+let API_BASE_URL = ''; // Padrão para produção (caminho relativo)
+
+// Detecta se estamos em um ambiente de desenvolvimento local.
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+// Se for local E a porta não for a do servidor Flask (ou seja, estamos usando o Live Server),
+// apontamos explicitamente para a API na porta 5000.
+if (isLocal && window.location.port !== '5000') {
+    API_BASE_URL = 'http://127.0.0.1:5000';
+    console.log('Ambiente de desenvolvimento detectado. Usando API em:', API_BASE_URL);
+}
 
 axios.defaults.baseURL = API_BASE_URL;
 axios.defaults.timeout = 30000;

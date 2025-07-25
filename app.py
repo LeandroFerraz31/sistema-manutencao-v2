@@ -22,7 +22,12 @@ origins = [
     "http://localhost:5500",
     "https://sistema-manutencao-v2.onrender.com"
 ]
-CORS(app, resources={r"/api/*": {"origins": origins}})
+CORS(app, resources={
+    r"/api/*": {
+        "origins": origins,
+        "expose_headers": "Content-Disposition" # Permite que o frontend leia o nome do arquivo
+    }
+})
 
 # Rota de teste para verificar conectividade
 @app.route('/api/test', methods=['GET'])
@@ -401,13 +406,13 @@ def exportar_excel():
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False, sheet_name='Manutencoes')
         output.seek(0)
-        headers = {
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': f'attachment; filename=manutencoes_geral_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx',
-            'Access-Control-Expose-Headers': 'Content-Disposition'
-        }
         logger.info("Arquivo Excel geral gerado com sucesso")
-        return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=f'manutencoes_geral_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'), 200, headers
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'manutencoes_geral_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        )
     except Exception as e:
         logger.error(f"Erro ao exportar para Excel: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao exportar para Excel: {str(e)}'}), 500

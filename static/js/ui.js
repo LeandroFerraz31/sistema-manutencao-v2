@@ -210,7 +210,7 @@ export function atualizarColinha(manutencoes, colinhaContent) {
                 <p><strong>CHAVE PIX:</strong> ${manutencao.pix || 'N/A'} ${manutencao.favorecido || ''}</p>
                 <p><strong>OC:</strong> ${manutencao.oc || 'N/A'}</p>
                 <p><strong>Local:</strong> ${manutencao.local || 'N/A'}</p>
-                <p><strong>Defeito:</strong> ${manutencao.defeito || 'N/A'}</p>
+                <p><strong>Defeito/Serviços:</strong> ${manutencao.defeito || 'N/A'}</p>
             </div>
             <button class="botao-copiar" data-texto="${entryText}">📋</button>
         `;
