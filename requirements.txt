@@ -6,4 +6,3 @@ pandas==2.2.2
 XlsxWriter==3.2.0
 setuptools>=68
 wheel
-cython>=3.0
