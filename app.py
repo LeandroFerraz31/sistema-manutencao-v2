@@ -9,12 +9,14 @@ import logging
 import os
 
 # Configuração de logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
-# Configuração de CORS
+# Configuração de CORS simplificada.
+# Permite que o frontend em desenvolvimento (ex: porta 5500) e o frontend
+# em produção no Render acessem a API.
 origins = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
@@ -23,7 +25,7 @@ origins = [
 CORS(app, resources={
     r"/api/*": {
         "origins": origins,
-        "expose_headers": "Content-Disposition"
+        "expose_headers": "Content-Disposition" # Permite que o frontend leia o nome do arquivo
     }
 })
 
@@ -35,10 +37,9 @@ def test():
 
 def init_db():
     try:
-        db_path = os.path.join(os.getcwd(), 'manutencoes.db')
-        logger.info(f"Inicializando banco de dados em: {db_path}")
-        
-        conn = sqlite3.connect(db_path)
+        if not os.path.exists('manutencoes.db'):
+            logger.info("Criando novo banco de dados: manutencoes.db")
+        conn = sqlite3.connect('manutencoes.db')
         c = conn.cursor()
 
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='manutencoes'")
@@ -60,7 +61,6 @@ def init_db():
                           local TEXT,
                           defeito TEXT)''')
         else:
-            # Verificar se a coluna telefone existe
             c.execute("PRAGMA table_info(manutencoes)")
             columns = [column[1] for column in c.fetchall()]
             if 'telefone' not in columns:
@@ -76,10 +76,9 @@ def init_db():
         conn.close()
         logger.info("Banco de dados inicializado com sucesso")
     except Exception as e:
-        logger.error(f"Erro ao inicializar o banco de dados: {str(e)}")
+        logger.error(f"Erro ao inicializar o banco de dados: {str(e)}", exc_info=True)
         raise
 
-# Inicializar o banco quando o módulo for carregado
 init_db()
 
 def format_date_from_excel(date_val):
@@ -87,6 +86,7 @@ def format_date_from_excel(date_val):
     if pd.isna(date_val) or date_val == '':
         return None
     try:
+        # Converte para objeto datetime do pandas, que lida com muitos formatos
         dt = pd.to_datetime(date_val)
         return dt.strftime('%Y-%m-%d')
     except (ValueError, TypeError):
@@ -95,7 +95,7 @@ def format_date_from_excel(date_val):
 
 @app.route('/')
 def index():
-    logger.info("Rota raiz acessada")
+    logger.debug("Rota raiz acessada")
     return render_template('index.html')
 
 @app.route('/api/manutencoes', methods=['POST'])
@@ -105,14 +105,17 @@ def add_manutencao():
         required_fields = ['data', 'placa', 'motorista', 'tipo', 'valor', 'local', 'defeito']
         missing_fields = [field for field in required_fields if field not in data or not data[field]]
         if missing_fields:
+            logger.warning(f"Campos obrigatórios ausentes: {missing_fields}")
             return jsonify({'error': f'Campos obrigatórios ausentes: {", ".join(missing_fields)}'}), 400
 
         valor = float(data['valor'])
         if valor < 0:
+            logger.warning("Valor negativo fornecido na requisição")
             return jsonify({'error': 'Valor deve ser maior ou igual a zero.'}), 400
 
         if not data.get('data'):
-            return jsonify({'error': f"Data inválida fornecida: '{data['data']}'."}), 400
+            logger.warning(f"Não foi possível converter a data fornecida: '{data['data']}'")
+            return jsonify({'error': f"Não foi possível converter a data fornecida: '{data['data']}'."}), 400
 
         conn = sqlite3.connect('manutencoes.db')
         c = conn.cursor()
@@ -125,9 +128,10 @@ def add_manutencao():
         logger.info("Manutenção adicionada com sucesso")
         return jsonify({'message': 'Manutenção adicionada com sucesso'}), 201
     except ValueError:
+        logger.warning("Valor fornecido não é um número válido")
         return jsonify({'error': 'Valor deve ser um número válido.'}), 400
     except Exception as e:
-        logger.error(f"Erro ao adicionar manutenção: {str(e)}")
+        logger.error(f"Erro ao adicionar manutenção: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao adicionar manutenção: {str(e)}'}), 500
 
 @app.route('/api/manutencoes', methods=['GET'])
@@ -138,11 +142,15 @@ def get_manutencoes():
         c = conn.cursor()
 
         if telefone_filtro:
+            logger.debug(f"Filtrando manutenções por telefone: {telefone_filtro}")
             c.execute('SELECT * FROM manutencoes WHERE telefone LIKE ?', (f'%{telefone_filtro}%',))
         else:
-            c.execute('SELECT * FROM manutencoes ORDER BY data DESC')
+            logger.debug("Recuperando todas as manutenções")
+            c.execute('SELECT * FROM manutencoes')
 
         rows = c.fetchall()
+        logger.debug(f"Registros brutos recuperados do banco: {rows}")
+
         manutencoes = []
         for row in rows:
             manutencao = {
@@ -162,10 +170,10 @@ def get_manutencoes():
             manutencoes.append(manutencao)
 
         conn.close()
-        logger.info(f"Retornadas {len(manutencoes)} manutenções")
+        logger.info(f"Manutenções retornadas: {len(manutencoes)}")
         return jsonify(manutencoes)
     except Exception as e:
-        logger.error(f"Erro ao recuperar manutenções: {str(e)}")
+        logger.error(f"Erro ao recuperar manutenções: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao recuperar manutenções: {str(e)}'}), 500
 
 @app.route('/api/manutencoes/<int:id>', methods=['PUT'])
@@ -175,11 +183,17 @@ def update_manutencao(id):
         required_fields = ['data', 'placa', 'motorista', 'tipo', 'valor', 'local', 'defeito']
         missing_fields = [field for field in required_fields if field not in data or not data[field]]
         if missing_fields:
+            logger.warning(f"Campos obrigatórios ausentes: {missing_fields}")
             return jsonify({'error': f'Campos obrigatórios ausentes: {", ".join(missing_fields)}'}), 400
 
         valor = float(data['valor'])
         if valor < 0:
+            logger.warning("Valor negativo fornecido na requisição")
             return jsonify({'error': 'Valor deve ser maior ou igual a zero.'}), 400
+
+        if not data.get('data'):
+            logger.warning(f"Não foi possível converter a data fornecida: '{data['data']}'")
+            return jsonify({'error': f"Não foi possível converter a data fornecida: '{data['data']}'."}), 400
 
         conn = sqlite3.connect('manutencoes.db')
         c = conn.cursor()
@@ -192,9 +206,10 @@ def update_manutencao(id):
         logger.info(f"Manutenção {id} atualizada com sucesso")
         return jsonify({'message': 'Manutenção atualizada com sucesso'})
     except ValueError:
+        logger.warning("Valor fornecido não é um número válido")
         return jsonify({'error': 'Valor deve ser um número válido.'}), 400
     except Exception as e:
-        logger.error(f"Erro ao atualizar manutenção: {str(e)}")
+        logger.error(f"Erro ao atualizar manutenção: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao atualizar manutenção: {str(e)}'}), 500
 
 @app.route('/api/manutencoes/<int:id>', methods=['DELETE'])
@@ -205,13 +220,14 @@ def delete_manutencao(id):
         c.execute('DELETE FROM manutencoes WHERE id = ?', (id,))
         if c.rowcount == 0:
             conn.close()
+            logger.warning(f"Manutenção com ID {id} não encontrada")
             return jsonify({'error': 'Manutenção não encontrada'}), 404
         conn.commit()
         conn.close()
         logger.info(f"Manutenção {id} excluída com sucesso")
         return jsonify({'message': 'Manutenção excluída com sucesso'})
     except Exception as e:
-        logger.error(f"Erro ao excluir manutenção: {str(e)}")
+        logger.error(f"Erro ao excluir manutenção: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao excluir manutenção: {str(e)}'}), 500
 
 @app.route('/api/estatisticas/motoristas', methods=['GET'])
@@ -232,9 +248,10 @@ def get_ranking_motoristas():
                 'valor_total': row[2] if row[2] is not None else 0.0
             })
         conn.close()
+        logger.info(f"Ranking de motoristas retornado: {len(motoristas)} motoristas")
         return jsonify(motoristas)
     except Exception as e:
-        logger.error(f"Erro ao recuperar ranking de motoristas: {str(e)}")
+        logger.error(f"Erro ao recuperar ranking de motoristas: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao recuperar ranking de motoristas: {str(e)}'}), 500
 
 @app.route('/api/estatisticas/veiculos', methods=['GET'])
@@ -255,9 +272,10 @@ def get_ranking_veiculos():
                 'valor_total': row[2] if row[2] is not None else 0.0
             })
         conn.close()
+        logger.info(f"Ranking de veículos retornado: {len(veiculos)} veículos")
         return jsonify(veiculos)
     except Exception as e:
-        logger.error(f"Erro ao recuperar ranking de veículos: {str(e)}")
+        logger.error(f"Erro ao recuperar ranking de veículos: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao recuperar ranking de veículos: {str(e)}'}), 500
 
 @app.route('/api/relatorios', methods=['POST'])
@@ -283,10 +301,10 @@ def gerar_relatorio():
             query += ' AND motorista = ?'
             params.append(motorista)
 
-        query += ' ORDER BY data DESC'
-
+        logger.debug(f"Executando query: {query} com parâmetros: {params}")
         c.execute(query, params)
         rows = c.fetchall()
+        logger.debug(f"Registros brutos do relatório: {rows}")
 
         manutencoes = []
         for row in rows:
@@ -310,7 +328,7 @@ def gerar_relatorio():
         logger.info(f"Relatório gerado: {len(manutencoes)} manutenções")
         return jsonify(manutencoes)
     except Exception as e:
-        logger.error(f"Erro ao gerar relatório: {str(e)}")
+        logger.error(f"Erro ao gerar relatório: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao gerar relatório: {str(e)}'}), 500
 
 @app.route('/api/exportar_relatorio_excel', methods=['POST'])
@@ -336,54 +354,58 @@ def exportar_relatorio_excel():
             query += ' AND motorista = ?'
             params.append(motorista)
 
-        query += ' ORDER BY data DESC'
-
+        logger.debug(f"Executando query para exportação: {query} com parâmetros: {params}")
         df = pd.read_sql_query(query, conn, params=params)
         conn.close()
 
         if df.empty:
+            logger.warning("Nenhum dado disponível para exportação de relatório filtrado")
             return jsonify({'error': 'Nenhum dado disponível para exportação com os filtros aplicados'}), 400
 
-        # Formatar datas
-        if 'data' in df.columns and not df['data'].empty:
-            df['data'] = pd.to_datetime(df['data'], errors='coerce').dt.strftime('%d/%m/%Y')
+        if 'data' in df.columns:
+            df['data'] = pd.to_datetime(df['data']).dt.strftime('%d/%m/%Y')
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False, sheet_name='RelatorioManutencoes')
         output.seek(0)
 
+        # Adicionar cabeçalhos explícitos para exportação
+        headers = {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': f'attachment; filename=relatorio_manutencoes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx',
+            'Access-Control-Expose-Headers': 'Content-Disposition'
+        }
         logger.info("Arquivo Excel de relatório filtrado gerado com sucesso")
         return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=f'relatorio_manutencoes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-        )
+    output,
+    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    as_attachment=True,
+    download_name=f'relatorio_manutencoes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+)
     except Exception as e:
-        logger.error(f"Erro ao exportar relatório para Excel: {str(e)}")
+        logger.error(f"Erro ao exportar relatório para Excel: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao exportar relatório para Excel: {str(e)}'}), 500
 
 @app.route('/api/exportar_excel', methods=['GET'])
 def exportar_excel():
     try:
         conn = sqlite3.connect('manutencoes.db')
-        query = 'SELECT * FROM manutencoes ORDER BY data DESC'
+        query = 'SELECT * FROM manutencoes'
         df = pd.read_sql_query(query, conn)
         conn.close()
 
         if df.empty:
+            logger.warning("Nenhum dado disponível para exportação")
             return jsonify({'error': 'Nenhum dado disponível para exportação'}), 400
 
-        # Formatar datas
-        if 'data' in df.columns and not df['data'].empty:
-            df['data'] = pd.to_datetime(df['data'], errors='coerce').dt.strftime('%d/%m/%Y')
+        if 'data' in df.columns:
+            df['data'] = pd.to_datetime(df['data']).dt.strftime('%d/%m/%Y')
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False, sheet_name='Manutencoes')
         output.seek(0)
-        
         logger.info("Arquivo Excel geral gerado com sucesso")
         return send_file(
             output,
@@ -392,7 +414,7 @@ def exportar_excel():
             download_name=f'manutencoes_geral_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
         )
     except Exception as e:
-        logger.error(f"Erro ao exportar para Excel: {str(e)}")
+        logger.error(f"Erro ao exportar para Excel: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao exportar para Excel: {str(e)}'}), 500
 
 @app.route('/api/importar_excel', methods=['POST'])
@@ -403,6 +425,7 @@ def importar_excel():
         filename = data.get('filename')
 
         if not file_data or not filename:
+            logger.warning("Dados do arquivo ou nome do arquivo ausentes")
             return jsonify({'error': 'Dados do arquivo ou nome do arquivo ausentes'}), 400
 
         file_content = base64.b64decode(file_data)
@@ -411,6 +434,7 @@ def importar_excel():
         required_columns = ['data', 'placa', 'motorista', 'tipo', 'valor', 'local', 'defeito']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
+            logger.warning(f"Colunas obrigatórias ausentes no Excel: {missing_columns}")
             return jsonify({'error': f'Colunas obrigatórias ausentes: {", ".join(missing_columns)}'}), 400
 
         conn = sqlite3.connect('manutencoes.db')
@@ -419,12 +443,15 @@ def importar_excel():
 
         for _, row in df.iterrows():
             try:
+                # Converter a data do Excel para YYYY-MM-DD
                 data_formatada = format_date_from_excel(row['data'])
                 if not data_formatada:
+                    logger.warning(f"Data inválida na linha {row.name}: {row['data']}")
                     continue
 
                 valor = float(row['valor'])
                 if valor < 0:
+                    logger.warning(f"Valor negativo na linha {row.name}: {row['valor']}")
                     continue
 
                 c.execute('''INSERT INTO manutencoes (data, placa, motorista, telefone, tipo, oc, valor, pix, favorecido, local, defeito)
@@ -434,7 +461,7 @@ def importar_excel():
                            str(row.get('favorecido', '')), str(row['local']), str(row['defeito'])))
                 inserted += 1
             except Exception as e:
-                logger.warning(f"Erro ao processar linha: {str(e)}")
+                logger.warning(f"Erro ao processar linha {row.name}: {str(e)}")
                 continue
 
         conn.commit()
@@ -442,9 +469,8 @@ def importar_excel():
         logger.info(f"{inserted} manutenções importadas com sucesso")
         return jsonify({'message': f'{inserted} manutenções importadas com sucesso'})
     except Exception as e:
-        logger.error(f"Erro ao importar Excel: {str(e)}")
+        logger.error(f"Erro ao importar Excel: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao importar Excel: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=True)
