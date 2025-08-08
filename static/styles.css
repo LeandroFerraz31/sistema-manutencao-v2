@@ -1245,6 +1245,16 @@ tr:hover {
     font-weight: 600;
 }
 
+/* Estilos da Seção do Mapa */
+#mapa .filter-input {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+#mapa-container {
+    height: 60vh; /* Altura relativa à viewport */
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+}
 /* Estilos do Footer */
 footer {
     text-align: center;

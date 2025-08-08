@@ -1,20 +1,14 @@
-# Banco de dados
+# Arquivo de banco de dados SQLite
 *.db
-*.sqlite
-*.sqlite3
+*.db-journal
 
-# Arquivos de cache do Python
+# Arquivos de cache e compilados do Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
 
 # Ambientes virtuais
 venv/
 .venv/
-env/
-.env
-test_manutencoes.xlsx
 
-# Arquivos de IDE
+# Arquivos de configuração de IDEs
 .vscode/

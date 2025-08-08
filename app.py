@@ -66,6 +66,12 @@ def init_db():
             if 'telefone' not in columns:
                 logger.info("Adicionando coluna 'telefone' à tabela 'manutencoes'...")
                 c.execute('ALTER TABLE manutencoes ADD COLUMN telefone TEXT DEFAULT ""')
+            if 'latitude' not in columns:
+                logger.info("Adicionando coluna 'latitude' à tabela 'manutencoes'...")
+                c.execute('ALTER TABLE manutencoes ADD COLUMN latitude REAL')
+            if 'longitude' not in columns:
+                logger.info("Adicionando coluna 'longitude' à tabela 'manutencoes'...")
+                c.execute('ALTER TABLE manutencoes ADD COLUMN longitude REAL')
 
         # Verificar registros existentes
         c.execute("SELECT COUNT(*) FROM manutencoes")
@@ -119,10 +125,11 @@ def add_manutencao():
 
         conn = sqlite3.connect('manutencoes.db')
         c = conn.cursor()
-        c.execute('''INSERT INTO manutencoes (data, placa, motorista, telefone, tipo, oc, valor, pix, favorecido, local, defeito)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        c.execute('''INSERT INTO manutencoes (data, placa, motorista, telefone, tipo, oc, valor, pix, favorecido, local, defeito, latitude, longitude)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (data['data'], data['placa'].upper(), data['motorista'], data.get('telefone', ''), data['tipo'], data.get('oc', ''),
-                   valor, data.get('pix', ''), data.get('favorecido', ''), data['local'], data['defeito']))
+                   valor, data.get('pix', ''), data.get('favorecido', ''), data['local'], data['defeito'],
+                   data.get('latitude'), data.get('longitude')))
         conn.commit()
         conn.close()
         logger.info("Manutenção adicionada com sucesso")
@@ -197,10 +204,11 @@ def update_manutencao(id):
 
         conn = sqlite3.connect('manutencoes.db')
         c = conn.cursor()
-        c.execute('''UPDATE manutencoes SET data = ?, placa = ?, motorista = ?, telefone = ?, tipo = ?, oc = ?, valor = ?, pix = ?, favorecido = ?, local = ?, defeito = ?
+        c.execute('''UPDATE manutencoes SET data = ?, placa = ?, motorista = ?, telefone = ?, tipo = ?, oc = ?, valor = ?, pix = ?, favorecido = ?, local = ?, defeito = ?, latitude = ?, longitude = ?
                      WHERE id = ?''',
                   (data['data'], data['placa'].upper(), data['motorista'], data.get('telefone', ''), data['tipo'], data.get('oc', ''),
-                   valor, data.get('pix', ''), data.get('favorecido', ''), data['local'], data['defeito'], id))
+                   valor, data.get('pix', ''), data.get('favorecido', ''), data['local'], data['defeito'],
+                   data.get('latitude'), data.get('longitude'), id))
         conn.commit()
         conn.close()
         logger.info(f"Manutenção {id} atualizada com sucesso")
@@ -471,6 +479,38 @@ def importar_excel():
     except Exception as e:
         logger.error(f"Erro ao importar Excel: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao importar Excel: {str(e)}'}), 500
+
+@app.route('/api/locais', methods=['GET'])
+def get_locais_mapa():
+    """
+    Endpoint otimizado para o mapa. Retorna locais únicos com coordenadas,
+    total de manutenções e tipos de serviços realizados no local.
+    """
+    try:
+        conn = sqlite3.connect('manutencoes.db')
+        conn.row_factory = sqlite3.Row # Facilita a conversão para dict
+        c = conn.cursor()
+
+        query = """
+            SELECT
+                local,
+                latitude,
+                longitude,
+                COUNT(*) as total_manutencoes,
+                GROUP_CONCAT(DISTINCT tipo) as tipos_servicos
+            FROM manutencoes
+            WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND local IS NOT NULL AND local != ''
+            GROUP BY local, latitude, longitude
+        """
+        c.execute(query)
+        rows = c.fetchall()
+        locais = [dict(row) for row in rows]
+        conn.close()
+        logger.info(f"Retornando {len(locais)} locais para o mapa.")
+        return jsonify(locais)
+    except Exception as e:
+        logger.error(f"Erro ao recuperar locais para o mapa: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Erro ao recuperar locais para o mapa: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
