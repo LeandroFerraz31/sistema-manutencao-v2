@@ -73,6 +73,44 @@ def init_db():
                 logger.info("Adicionando coluna 'longitude' à tabela 'manutencoes'...")
                 c.execute('ALTER TABLE manutencoes ADD COLUMN longitude REAL')
 
+        # Adiciona a tabela para os locais do mapa, se não existir
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='mapa_locais'")
+        if not c.fetchone():
+            logger.info("Criando tabela 'mapa_locais'...")
+            c.execute('''CREATE TABLE mapa_locais
+                        (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                         nome TEXT NOT NULL,
+                         tipo TEXT NOT NULL, -- 'unidade' ou tipo de prestador
+                         latitude REAL NOT NULL,
+                         longitude REAL NOT NULL,
+                         endereco TEXT,
+                         cidade TEXT,
+                         estado TEXT,
+                         telefone TEXT,
+                         observacoes TEXT,
+                         servicos TEXT, -- Armazenado como texto separado por vírgulas
+                         avaliacao REAL
+                        )''')
+        else:
+            logger.info("Tabela 'mapa_locais' já existe. Verificando e adicionando colunas ausentes...")
+            c.execute("PRAGMA table_info(mapa_locais)")
+            columns = [column[1] for column in c.fetchall()]
+            
+            colunas_a_adicionar = {
+                'endereco': 'TEXT',
+                'cidade': 'TEXT',
+                'estado': 'TEXT',
+                'telefone': 'TEXT',
+                'observacoes': 'TEXT',
+                'servicos': 'TEXT',
+                'avaliacao': 'REAL'
+            }
+
+            for col, tipo in colunas_a_adicionar.items():
+                if col not in columns:
+                    logger.info(f"Adicionando coluna '{col}' à tabela 'mapa_locais'...")
+                    c.execute(f'ALTER TABLE mapa_locais ADD COLUMN {col} {tipo}')
+
         # Verificar registros existentes
         c.execute("SELECT COUNT(*) FROM manutencoes")
         count = c.fetchone()[0]
@@ -527,6 +565,108 @@ def get_locais_mapa():
     except Exception as e:
         logger.error(f"Erro ao recuperar locais para o mapa: {str(e)}", exc_info=True)
         return jsonify({'error': f'Erro ao recuperar locais para o mapa: {str(e)}'}), 500
+
+# --- NOVOS ENDPOINTS PARA GERENCIAR LOCAIS DO MAPA (BASES/PRESTADORES) ---
+
+@app.route('/api/mapa/locais', methods=['POST'])
+def add_mapa_local():
+    """Adiciona um novo local (base ou prestador) no banco de dados."""
+    data = request.json
+    logger.debug(f"Recebido para adicionar local no mapa: {data}")
+    try:
+        required_fields = ['nome', 'tipo', 'latitude', 'longitude', 'cidade', 'estado']
+        if not all(field in data and data[field] for field in required_fields):
+            logger.warning(f"Campos obrigatórios ausentes no cadastro do mapa: {data}")
+            return jsonify({'error': 'Campos obrigatórios (nome, tipo, latitude, longitude, cidade, estado) ausentes'}), 400
+
+        conn = sqlite3.connect('manutencoes.db')
+        c = conn.cursor()
+        c.execute('''INSERT INTO mapa_locais (
+                        nome, tipo, latitude, longitude, endereco, cidade, estado, 
+                        telefone, observacoes, servicos, avaliacao
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (data['nome'], data['tipo'], data['latitude'], data['longitude'],
+                   data.get('endereco', ''), data.get('cidade', ''), data.get('estado', ''),
+                   data.get('telefone', ''), data.get('observacoes', ''),
+                   # Converte a lista de serviços em uma string
+                   ','.join(data.get('servicos', [])),
+                   data.get('avaliacao')
+                  ))
+        conn.commit()
+        new_id = c.lastrowid
+        data['id'] = new_id
+        conn.close()
+        logger.info(f"Novo local de mapa adicionado: {data['nome']} (ID: {new_id})")
+        return jsonify(data), 201
+    except Exception as e:
+        logger.error(f"Erro ao adicionar local no mapa: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Erro ao adicionar local: {str(e)}'}), 500
+
+@app.route('/api/mapa/locais', methods=['GET'])
+def get_all_mapa_locais():
+    """Retorna todas as bases e prestadores salvos no banco de dados."""
+    try:
+        conn = sqlite3.connect('manutencoes.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute('SELECT * FROM mapa_locais')
+        locais = [dict(row) for row in c.fetchall()]
+        conn.close()
+        logger.info(f"Retornando {len(locais)} locais personalizados do mapa.")
+        return jsonify(locais)
+    except Exception as e:
+        logger.error(f"Erro ao buscar locais do mapa: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Erro ao buscar locais: {str(e)}'}), 500
+
+@app.route('/api/mapa/locais/<int:id>', methods=['PUT'])
+def update_mapa_local(id):
+    """Atualiza um local existente no mapa."""
+    data = request.json
+    logger.debug(f"Recebido para ATUALIZAR local no mapa (ID: {id}): {data}")
+    try:
+        required_fields = ['nome', 'tipo', 'latitude', 'longitude', 'cidade', 'estado']
+        if not all(field in data and data[field] for field in required_fields):
+            logger.warning(f"Campos obrigatórios ausentes na atualização do mapa: {data}")
+            return jsonify({'error': 'Campos obrigatórios (nome, tipo, latitude, longitude, cidade, estado) ausentes'}), 400
+
+        conn = sqlite3.connect('manutencoes.db')
+        c = conn.cursor()
+        c.execute('''UPDATE mapa_locais SET
+                        nome = ?, tipo = ?, latitude = ?, longitude = ?, endereco = ?, cidade = ?, 
+                        estado = ?, telefone = ?, observacoes = ?, servicos = ?, avaliacao = ?
+                     WHERE id = ?''',
+                  (data['nome'], data['tipo'], data['latitude'], data['longitude'],
+                   data.get('endereco', ''), data.get('cidade', ''), data.get('estado', ''),
+                   data.get('telefone', ''), data.get('observacoes', ''),
+                   ','.join(data.get('servicos', [])),
+                   data.get('avaliacao'),
+                   id
+                  ))
+        conn.commit()
+        conn.close()
+        logger.info(f"Local de mapa com ID {id} atualizado.")
+        return jsonify({'message': 'Local atualizado com sucesso'})
+    except Exception as e:
+        logger.error(f"Erro ao atualizar local do mapa: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Erro ao atualizar local: {str(e)}'}), 500
+
+@app.route('/api/mapa/locais/<int:id>', methods=['DELETE'])
+def delete_mapa_local(id):
+    """Exclui um local personalizado do mapa."""
+    try:
+        conn = sqlite3.connect('manutencoes.db')
+        c = conn.cursor()
+        c.execute('DELETE FROM mapa_locais WHERE id = ?', (id,))
+        if c.rowcount == 0:
+            conn.close()
+            return jsonify({'error': 'Local não encontrado'}), 404
+        conn.commit()
+        conn.close()
+        logger.info(f"Local de mapa com ID {id} excluído.")
+        return jsonify({'message': 'Local excluído com sucesso'})
+    except Exception as e:
+        logger.error(f"Erro ao excluir local do mapa: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Erro ao excluir local: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

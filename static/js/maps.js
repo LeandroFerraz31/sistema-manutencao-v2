@@ -78,17 +78,14 @@ export function inicializarMapa() {
   // Cria layer para markers
   markersLayer = L.layerGroup().addTo(mapa);
 
-  // Carrega dados do localStorage
-  carregarDadosLocalStorage();
+  // Carrega dados do servidor
+  carregarDadosDoServidor();
   
   // Configura interface de cadastro
   configurarInterfaceCadastro();
   
   // Configura controles de filtro
   configurarControlesFiltro();
-  
-  // Adiciona marcadores iniciais
-  adicionarMarcadores();
   
   // Configura eventos do mapa
   configurarEventosMapa();
@@ -435,52 +432,47 @@ window.fecharModal = function(elemento) {
 /**
  * Salva cadastro (base ou prestador)
  */
-function salvarCadastro(tipo, form) {
+async function salvarCadastro(tipo, form) {
   const formData = new FormData(form);
   const dados = {
-    id: Date.now(), // ID único baseado em timestamp
     nome: formData.get('nome'),
     endereco: formData.get('endereco'),
     cidade: formData.get('cidade'),
-    estado: formData.get('estado').toUpperCase(),
-    lat: parseFloat(formData.get('lat')),
-    lng: parseFloat(formData.get('lng')),
+    estado: formData.get('estado')?.toUpperCase(),
+    latitude: parseFloat(formData.get('lat')),
+    longitude: parseFloat(formData.get('lng')),
     telefone: formData.get('telefone') || '',
     observacoes: formData.get('observacoes') || ''
   };
 
   if (tipo === 'base') {
     dados.tipo = 'unidade';
-    unidades.push(dados);
-    console.log('Nova base cadastrada:', dados);
   } else {
     dados.tipo = formData.get('tipo');
     dados.servicos = formData.get('servicos') ? 
       formData.get('servicos').split(',').map(s => s.trim()).filter(s => s) : [];
     dados.avaliacao = parseFloat(formData.get('avaliacao')) || 3; // Default para 3 (Normal)
-    prestadores.push(dados);
-    console.log('Novo prestador cadastrado:', dados);
   }
 
-  // Salva no localStorage
-  salvarDadosLocalStorage();
+  try {
+    const novoLocal = await axios.post('/api/mapa/locais', dados);
+    console.log('Novo local salvo no servidor:', novoLocal.data);
 
-  // Atualiza interface
-  adicionarMarcadores();
-  popularFiltros();
+    // Atualiza a interface recarregando os dados
+    await carregarDadosDoServidor();
 
-  // Fecha modal e cancela modo cadastro
-  form.closest('.modal-cadastro-mapa').remove();
-  cancelarModoCadastro();
+    // Fecha modal e cancela modo cadastro
+    form.closest('.modal-cadastro-mapa').remove();
+    cancelarModoCadastro();
 
-  // Mostra notificação
-  mostrarNotificacao(
-    `${tipo === 'base' ? 'Base' : 'Prestador'} cadastrado com sucesso!`, 
-    'success'
-  );
+    mostrarNotificacao(`${tipo === 'base' ? 'Base' : 'Prestador'} cadastrado com sucesso!`, 'success');
 
-  // Centraliza no novo item cadastrado
-  mapa.setView([dados.lat, dados.lng], 15);
+    // Centraliza no novo item cadastrado
+    mapa.setView([novoLocal.data.latitude, novoLocal.data.longitude], 15);
+  } catch (error) {
+    console.error('Erro ao salvar local:', error);
+    mostrarNotificacao(`Erro ao salvar: ${error.response?.data?.error || error.message}`, 'error');
+  }
 }
 
 /**
@@ -504,77 +496,31 @@ async function buscarEnderecoPorCoordenadas(lat, lng) {
 }
 
 /**
- * Salva dados no localStorage
+ * Carrega dados do servidor (substitui carregarDadosLocalStorage)
  */
-function salvarDadosLocalStorage() {
+async function carregarDadosDoServidor() {
   try {
-    localStorage.setItem('mapa_unidades', JSON.stringify(unidades));
-    localStorage.setItem('mapa_prestadores', JSON.stringify(prestadores));
+    const response = await axios.get('/api/mapa/locais');
+    const locais = response.data;
+    console.log(`${locais.length} locais carregados do servidor.`);
+
+    // Separa os locais em unidades e prestadores
+    unidades = locais.filter(l => l.tipo === 'unidade');
+    prestadores = locais.filter(l => l.tipo !== 'unidade');
+
+    // Converte a string de serviços de volta para um array
+    prestadores.forEach(p => {
+      if (p.servicos && typeof p.servicos === 'string') {
+        p.servicos = p.servicos.split(',').filter(s => s);
+      }
+    });
+
+    adicionarMarcadores();
+    popularFiltros();
   } catch (error) {
-    console.error('Erro ao salvar dados no localStorage:', error);
+    console.error('Erro ao carregar dados do servidor:', error);
+    mostrarNotificacao('Não foi possível carregar os dados do mapa.', 'error');
   }
-}
-
-/**
- * Carrega dados do localStorage
- */
-function carregarDadosLocalStorage() {
-  try {
-    const unidadesSalvas = localStorage.getItem('mapa_unidades');
-    const prestadoresSalvos = localStorage.getItem('mapa_prestadores');
-    
-    if (unidadesSalvas) {
-      unidades = JSON.parse(unidadesSalvas);
-    }
-    
-    if (prestadoresSalvos) {
-      prestadores = JSON.parse(prestadoresSalvos);
-    }
-
-    // Se não há dados salvos, carrega alguns exemplos
-    if (unidades.length === 0) {
-      carregarDadosExemplo();
-    }
-    
-  } catch (error) {
-    console.error('Erro ao carregar dados do localStorage:', error);
-    carregarDadosExemplo();
-  }
-}
-
-/**
- * Carrega dados de exemplo (primeira vez)
- */
-function carregarDadosExemplo() {
-  unidades = [
-    {
-      id: 1,
-      nome: "Base Central - São Paulo",
-      endereco: "Av. Paulista, 1000, São Paulo/SP",
-      cidade: "São Paulo",
-      estado: "SP",
-      lat: -23.5505,
-      lng: -46.6333,
-      tipo: "unidade",
-      telefone: "(11) 3000-0000"
-    }
-  ];
-
-  prestadores = [
-    {
-      id: 101,
-      nome: "Borracharia do João",
-      endereco: "Rua Augusta, 1200, São Paulo/SP",
-      cidade: "São Paulo",
-      estado: "SP",
-      lat: -23.5489,
-      lng: -46.6388,
-      tipo: "borracharia",
-      servicos: ["Pneu", "Roda", "Alinhamento"],
-      telefone: "(11) 99999-0001",
-      avaliacao: 4.5
-    }
-  ];
 }
 
 /**
@@ -587,18 +533,18 @@ function adicionarMarcadores() {
 
   // Adiciona marcadores das unidades
   unidades.forEach(unidade => {
-    const marker = L.marker([unidade.lat, unidade.lng], { 
+    const marker = L.marker([unidade.latitude, unidade.longitude], { 
       icon: icones.unidade 
     }).addTo(markersLayer);
 
     const popupContent = criarPopupUnidade(unidade);
     marker.bindPopup(popupContent);
   });
-
+  
   // Adiciona marcadores dos prestadores
   prestadores.forEach(prestador => {
     const icone = icones[prestador.tipo] || icones.fornecedor;
-    const marker = L.marker([prestador.lat, prestador.lng], { 
+    const marker = L.marker([prestador.latitude, prestador.longitude], { 
       icon: icone 
     }).addTo(markersLayer);
 
@@ -650,10 +596,10 @@ function aplicarFiltros() {
     if (baseSelecionada) {
       prestadoresFiltrados = prestadoresFiltrados.filter(prestador => {
         const distancia = calcularDistancia(
-          baseSelecionada.lat, 
-          baseSelecionada.lng,
-          prestador.lat, 
-          prestador.lng
+          baseSelecionada.latitude, 
+          baseSelecionada.longitude,
+          prestador.latitude, 
+          prestador.longitude
         );
         return distancia <= parseInt(raio);
       });
@@ -673,7 +619,7 @@ function aplicarFiltros() {
     // Desenha círculo do raio
     desenharCirculoRaio(baseSelecionada, parseInt(raio));
     // Centraliza na base
-    mapa.setView([baseSelecionada.lat, baseSelecionada.lng], 8);
+    mapa.setView([baseSelecionada.latitude, baseSelecionada.longitude], 8);
   }
 
   console.log(`Filtros aplicados: ${prestadoresFiltrados.length} prestadores encontrados`);
@@ -687,7 +633,7 @@ function atualizarMarcadores(prestadoresFiltrados, baseSelecionada = null) {
 
   // Sempre mostra todas as unidades
   unidades.forEach(unidade => {
-    const marker = L.marker([unidade.lat, unidade.lng], { 
+    const marker = L.marker([unidade.latitude, unidade.longitude], { 
       icon: icones.unidade 
     }).addTo(markersLayer);
 
@@ -708,7 +654,7 @@ function atualizarMarcadores(prestadoresFiltrados, baseSelecionada = null) {
   // Mostra apenas prestadores filtrados
   prestadoresFiltrados.forEach(prestador => {
     const icone = icones[prestador.tipo] || icones.fornecedor;
-    const marker = L.marker([prestador.lat, prestador.lng], { 
+    const marker = L.marker([prestador.latitude, prestador.longitude], { 
       icon: icone 
     }).addTo(markersLayer);
 
@@ -780,7 +726,7 @@ function atualizarMarcadoresComTexto(prestadoresFiltrados, unidadesFiltradas) {
 
   // Adiciona unidades filtradas
   unidadesFiltradas.forEach(unidade => {
-    const marker = L.marker([unidade.lat, unidade.lng], { 
+    const marker = L.marker([unidade.latitude, unidade.longitude], { 
       icon: icones.unidade 
     }).addTo(markersLayer);
 
@@ -791,7 +737,7 @@ function atualizarMarcadoresComTexto(prestadoresFiltrados, unidadesFiltradas) {
   // Adiciona prestadores filtrados
   prestadoresFiltrados.forEach(prestador => {
     const icone = icones[prestador.tipo] || icones.fornecedor;
-    const marker = L.marker([prestador.lat, prestador.lng], { 
+    const marker = L.marker([prestador.latitude, prestador.longitude], { 
       icon: icone 
     }).addTo(markersLayer);
 
@@ -910,8 +856,8 @@ window.criarRota = function(prestadorId) {
     let menorDistancia = Infinity;
     unidades.forEach(unidade => {
       const distancia = calcularDistancia(
-        unidade.lat, unidade.lng,
-        prestador.lat, prestador.lng
+        unidade.latitude, unidade.longitude,
+        prestador.latitude, prestador.longitude
       );
       if (distancia < menorDistancia) {
         menorDistancia = distancia;
@@ -927,8 +873,8 @@ window.criarRota = function(prestadorId) {
 
   // Cria nova rota (simulada, pois requer biblioteca adicional)
   const linha = L.polyline([
-    [baseOrigem.lat, baseOrigem.lng],
-    [prestador.lat, prestador.lng]
+    [baseOrigem.latitude, baseOrigem.longitude],
+    [prestador.latitude, prestador.longitude]
   ], {
     color: '#ff6b35',
     weight: 4,
@@ -940,8 +886,8 @@ window.criarRota = function(prestadorId) {
 
   // Ajusta visualização para mostrar a rota
   mapa.fitBounds([
-    [baseOrigem.lat, baseOrigem.lng],
-    [prestador.lat, prestador.lng]
+    [baseOrigem.latitude, baseOrigem.longitude],
+    [prestador.latitude, prestador.longitude]
   ], { padding: [20, 20] });
 
   console.log(`Rota criada de ${baseOrigem.nome} para ${prestador.nome}`);
@@ -968,31 +914,26 @@ window.editarItem = function(tipo, id) {
 /**
  * Exclui um item (base ou prestador)
  */
-window.excluirItem = function(tipo, id) {
-  let item;
-  if (tipo === 'unidade') {
-    item = unidades.find(u => u.id === id);
-  } else {
-    item = prestadores.find(p => p.id === id);
-  }
-
+window.excluirItem = async function(tipo, id) {
+  const item = (tipo === 'unidade' ? unidades : prestadores).find(i => i.id === id);
   if (!item) return;
 
   if (confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) {
-    if (tipo === 'unidade') {
-      unidades = unidades.filter(u => u.id !== id);
-    } else {
-      prestadores = prestadores.filter(p => p.id !== id);
+    try {
+      await axios.delete(`/api/mapa/locais/${id}`);
+      
+      // Atualiza a interface recarregando os dados
+      await carregarDadosDoServidor();
+
+      mostrarNotificacao(
+        `${tipo === 'unidade' ? 'Base' : 'Prestador'} excluído com sucesso!`, 
+        'success'
+      );
+
+    } catch (error) {
+      console.error('Erro ao excluir local:', error);
+      mostrarNotificacao(`Erro ao excluir: ${error.response?.data?.error || error.message}`, 'error');
     }
-
-    // Salva no localStorage
-    salvarDadosLocalStorage();
-
-    // Atualiza interface
-    adicionarMarcadores();
-    popularFiltros();
-
-    mostrarNotificacao(`${tipo === 'unidade' ? 'Base' : 'Prestador'} excluído com sucesso!`, 'success');
   }
 };
 
@@ -1020,8 +961,8 @@ function criarModalEdicao(tipo, item) {
       
       <form id="form-edicao-${tipo}">
         <input type="hidden" name="id" value="${item.id}">
-        <input type="hidden" name="lat" value="${item.lat}">
-        <input type="hidden" name="lng" value="${item.lng}">
+        <input type="hidden" name="lat" value="${item.latitude}">
+        <input type="hidden" name="lng" value="${item.longitude}">
         
         <div style="margin-bottom: 15px;">
           <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nome *</label>
@@ -1128,54 +1069,48 @@ function criarModalEdicao(tipo, item) {
 /**
  * Salva edição de item
  */
-function salvarEdicao(tipo, form) {
+async function salvarEdicao(tipo, form) {
   const formData = new FormData(form);
   const id = parseInt(formData.get('id'));
   
   const dadosAtualizados = {
     id: id,
     nome: formData.get('nome'),
+    latitude: parseFloat(formData.get('lat')),
+    longitude: parseFloat(formData.get('lng')),
     endereco: formData.get('endereco'),
     cidade: formData.get('cidade'),
-    estado: formData.get('estado').toUpperCase(),
-    lat: parseFloat(formData.get('lat')),
-    lng: parseFloat(formData.get('lng')),
+    estado: formData.get('estado')?.toUpperCase(),
     telefone: formData.get('telefone') || '',
     observacoes: formData.get('observacoes') || ''
   };
 
   if (tipo === 'unidade') {
     dadosAtualizados.tipo = 'unidade';
-    const index = unidades.findIndex(u => u.id === id);
-    if (index !== -1) {
-      unidades[index] = { ...unidades[index], ...dadosAtualizados };
-    }
   } else {
     dadosAtualizados.tipo = formData.get('tipo');
     dadosAtualizados.servicos = formData.get('servicos') ? 
       formData.get('servicos').split(',').map(s => s.trim()).filter(s => s) : [];
     dadosAtualizados.avaliacao = parseFloat(formData.get('avaliacao')) || 3;
-    
-    const index = prestadores.findIndex(p => p.id === id);
-    if (index !== -1) {
-      prestadores[index] = { ...prestadores[index], ...dadosAtualizados };
-    }
   }
 
-  // Salva no localStorage
-  salvarDadosLocalStorage();
+  try {
+    await axios.put(`/api/mapa/locais/${id}`, dadosAtualizados);
 
-  // Atualiza interface
-  adicionarMarcadores();
-  popularFiltros();
+    // Atualiza a interface recarregando os dados
+    await carregarDadosDoServidor();
 
-  // Fecha modal
-  form.closest('.modal-cadastro-mapa').remove();
+    // Fecha modal
+    form.closest('.modal-cadastro-mapa').remove();
 
-  mostrarNotificacao(
-    `${tipo === 'unidade' ? 'Base' : 'Prestador'} atualizado com sucesso!`, 
-    'success'
-  );
+    mostrarNotificacao(
+      `${tipo === 'unidade' ? 'Base' : 'Prestador'} atualizado com sucesso!`, 
+      'success'
+    );
+  } catch (error) {
+    console.error('Erro ao atualizar local:', error);
+    mostrarNotificacao(`Erro ao atualizar: ${error.response?.data?.error || error.message}`, 'error');
+  }
 }
 
 /**
@@ -1207,7 +1142,7 @@ function desenharCirculoRaio(base, raio) {
   }
 
   // Cria novo círculo
-  window.circuloRaio = L.circle([base.lat, base.lng], {
+  window.circuloRaio = L.circle([base.latitude, base.longitude], {
     color: '#007bff',
     fillColor: '#007bff',
     fillOpacity: 0.1,
@@ -1320,30 +1255,14 @@ export function importarDados() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
       try {
         const dados = JSON.parse(e.target.result);
         
         // Valida estrutura dos dados
         if (dados.unidades && dados.prestadores && Array.isArray(dados.unidades) && Array.isArray(dados.prestadores)) {
-          
-          // Confirma importação
-          if (confirm(`Importar dados do backup?\n\nUnidades: ${dados.unidades.length}\nPrestadores: ${dados.prestadores.length}\n\nISTO SUBSTITUIRÁ TODOS OS DADOS ATUAIS!`)) {
-            
-            // Substitui dados
-            unidades = dados.unidades;
-            prestadores = dados.prestadores;
-            
-            // Salva no localStorage
-            salvarDadosLocalStorage();
-            
-            // Atualiza interface
-            adicionarMarcadores();
-            popularFiltros();
-            
-            mostrarNotificacao('Dados importados com sucesso!', 'success');
-            console.log('Dados importados:', dados);
-          }
+          // TODO: Implementar lógica de importação para o servidor
+          mostrarNotificacao('Funcionalidade de importação ainda não conectada ao servidor.', 'info');
         } else {
           mostrarNotificacao('Formato de arquivo inválido!', 'error');
         }
@@ -1363,30 +1282,8 @@ export function importarDados() {
  * Limpa todos os dados (reset)
  */
 export function limparTodosDados() {
-  if (confirm('ATENÇÃO: Esta ação irá apagar TODOS os dados salvos!\n\nIsso inclui todas as bases e prestadores cadastrados.\n\nTem certeza que deseja continuar?')) {
-    if (confirm('ÚLTIMA CONFIRMAÇÃO: Todos os dados serão perdidos permanentemente!\n\nContinuar mesmo assim?')) {
-      
-      // Limpa arrays
-      unidades = [];
-      prestadores = [];
-      
-      // Remove do localStorage
-      localStorage.removeItem('mapa_unidades');
-      localStorage.removeItem('mapa_prestadores');
-      
-      // Carrega dados de exemplo
-      carregarDadosExemplo();
-      salvarDadosLocalStorage();
-      
-      // Atualiza interface
-      adicionarMarcadores();
-      popularFiltros();
-      limparFiltros();
-      
-      mostrarNotificacao('Todos os dados foram removidos! Dados de exemplo carregados.', 'info');
-      console.log('Dados resetados para exemplos padrão');
-    }
-  }
+  // TODO: Implementar chamada de API para limpar dados no servidor, se necessário.
+  mostrarNotificacao('Funcionalidade de limpar todos os dados ainda não implementada para o servidor.', 'info');
 }
 
 /**
@@ -1501,7 +1398,7 @@ export async function buscarPorEndereco(endereco) {
       
       // Busca prestadores próximos (raio de 50km)
       const prestadoresProximos = prestadores.filter(prestador => {
-        const distancia = calcularDistancia(lat, lng, prestador.lat, prestador.lng);
+        const distancia = calcularDistancia(lat, lng, prestador.latitude, prestador.longitude);
         return distancia <= 50;
       });
       
@@ -1613,7 +1510,7 @@ export function validarDados() {
     if (!unidade.nome || unidade.nome.trim() === '') {
       erros.push(`Unidade ${index + 1}: Nome vazio`);
     }
-    if (!unidade.lat || !unidade.lng || isNaN(unidade.lat) || isNaN(unidade.lng)) {
+    if (!unidade.latitude || !unidade.longitude || isNaN(unidade.latitude) || isNaN(unidade.longitude)) {
       erros.push(`Unidade ${index + 1} (${unidade.nome}): Coordenadas inválidas`);
     }
     if (!unidade.cidade || unidade.cidade.trim() === '') {
@@ -1629,7 +1526,7 @@ export function validarDados() {
     if (!prestador.nome || prestador.nome.trim() === '') {
       erros.push(`Prestador ${index + 1}: Nome vazio`);
     }
-    if (!prestador.lat || !prestador.lng || isNaN(prestador.lat) || isNaN(prestador.lng)) {
+    if (!prestador.latitude || !prestador.longitude || isNaN(prestador.latitude) || isNaN(prestador.longitude)) {
       erros.push(`Prestador ${index + 1} (${prestador.nome}): Coordenadas inválidas`);
     }
     if (!prestador.cidade || prestador.cidade.trim() === '') {
