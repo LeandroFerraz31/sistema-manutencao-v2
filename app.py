@@ -172,7 +172,9 @@ def get_manutencoes():
                 'pix': row[8] or '',
                 'favorecido': row[9] or '',
                 'local': row[10] or '',
-                'defeito': row[11] or ''
+                'defeito': row[11] or '',
+                'latitude': row[12],
+                'longitude': row[13]
             }
             manutencoes.append(manutencao)
 
@@ -328,7 +330,9 @@ def gerar_relatorio():
                 'pix': row[8] or '',
                 'favorecido': row[9] or '',
                 'local': row[10] or '',
-                'defeito': row[11] or ''
+                'defeito': row[11] or '',
+                'latitude': row[12],
+                'longitude': row[13]
             }
             manutencoes.append(manutencao)
 
@@ -373,6 +377,12 @@ def exportar_relatorio_excel():
         if 'data' in df.columns:
             df['data'] = pd.to_datetime(df['data']).dt.strftime('%d/%m/%Y')
 
+        # Converte todas as colunas de texto para maiúsculas, exceto a data
+        for col in df.select_dtypes(include=['object']).columns:
+            if col.lower() != 'data':
+                # Usar .astype(str) para lidar com valores nulos (NaN) e convertê-los para vazio
+                df[col] = df[col].astype(str).str.upper().replace('NAN', '')
+
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False, sheet_name='RelatorioManutencoes')
@@ -409,6 +419,12 @@ def exportar_excel():
 
         if 'data' in df.columns:
             df['data'] = pd.to_datetime(df['data']).dt.strftime('%d/%m/%Y')
+
+        # Converte todas as colunas de texto para maiúsculas, exceto a data
+        for col in df.select_dtypes(include=['object']).columns:
+            if col.lower() != 'data':
+                # Usar .astype(str) para lidar com valores nulos (NaN) e convertê-los para vazio
+                df[col] = df[col].astype(str).str.upper().replace('NAN', '')
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:

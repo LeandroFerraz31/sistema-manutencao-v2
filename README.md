@@ -24,6 +24,12 @@ Sistema completo de controle de manutenções veiculares com dashboard interativ
 - **Estatísticas avançadas**: Insights sobre padrões de manutenção
 - **Colinha rápida**: Para cópia de informações essenciais
 
+### 🗺️ Mapa Interativo de Prestadores
+- **Cadastro Georreferenciado**: Adicione "Bases" e "Prestadores de Serviço" diretamente no mapa.
+- **Persistência Local**: Os dados do mapa são salvos no `localStorage` do seu navegador, independentes do banco de dados principal.
+- **Filtros Avançados**: Filtre prestadores por tipo, raio de distância de uma base e busca textual.
+- **Ferramentas de Gestão**: Exporte/importe seus dados do mapa em formato JSON, gere relatórios e valide a integridade dos dados.
+
 ### 🎨 Design Moderno
 - **Estilo Power BI**: Cores vibrantes, gradientes e cards elegantes
 - **Responsivo**: Funciona perfeitamente em desktop e mobile
@@ -50,6 +56,7 @@ Sistema completo de controle de manutenções veiculares com dashboard interativ
 - **JavaScript ES6+**: Lógica interativa e manipulação do DOM
 - **Chart.js**: Gráficos interativos e responsivos
 - **Axios**: Cliente HTTP para comunicação com API
+- **Leaflet.js**: Biblioteca para mapas interativos
 
 ## 📁 Estrutura do Projeto
 
@@ -66,7 +73,8 @@ dashboard_manutencoes_evoluido/
 │ ├── api.js # Módulo para comunicação com a API
 │ ├── ui.js # Módulo para manipulação da interface do usuário (DOM)
 │ ├── charts.js # Módulo para gerenciamento dos gráficos
-│ └── utils.js # Módulo com funções utilitárias
+│ ├── utils.js # Módulo com funções utilitárias
+│ └── maps.js # Módulo completo para o mapa interativo de prestadores
 └── README.md # Esta documentação
 ```
 

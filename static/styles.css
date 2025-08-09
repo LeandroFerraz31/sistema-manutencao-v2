@@ -942,6 +942,14 @@ tr:hover {
     transition: all var(--transition-normal);
 }
 
+.map-link {
+    text-decoration: none;
+    margin-left: 8px;
+    font-size: 1.2rem;
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+
 .botao-copiar:hover {
     transform: scale(1.1);
 }

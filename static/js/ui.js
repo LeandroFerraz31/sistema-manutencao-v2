@@ -197,20 +197,35 @@ export function atualizarColinha(manutencoes, colinhaContent) {
         return;
     }
 
-    manutencoes.forEach(manutencao => {
-        const entryText = `Placa: ${manutencao.placa || 'N/A'}\nMotorista: ${manutencao.motorista || 'N/A'} - Tipo: ${manutencao.tipo || 'N/A'}\nValor total: ${formatarMoeda(Number(manutencao.valor || 0))}\nCHAVE PIX: ${manutencao.pix || 'N/A'} ${manutencao.favorecido || ''}\nOC: ${manutencao.oc || 'N/A'}\nLocal: ${manutencao.local || 'N/A'}\nDefeito: ${manutencao.defeito || 'N/A'}`.trim();
+    manutencoes.forEach(man => {
+        // Constrói o texto para o botão de copiar
+        const entryText = `Placa: ${man.placa || 'N/A'}\nMotorista: ${man.motorista || 'N/A'} - Tipo: ${man.tipo || 'N/A'}\nValor total: ${formatarMoeda(Number(man.valor || 0))}\nCHAVE PIX: ${man.pix || 'N/A'} ${man.favorecido || ''}\nOC: ${man.oc || 'N/A'}\nLocal: ${man.local || 'N/A'}\nDefeito: ${man.defeito || 'N/A'}`.trim();
+
+        // Constrói o link do Google Maps se houver coordenadas
+        let mapaLink = '';
+        if (man.latitude && man.longitude) {
+            const url = `https://www.google.com/maps?q=${man.latitude},${man.longitude}`;
+            mapaLink = `
+                <a href="${url}" class="map-link" target="_blank" title="Ver no Google Maps">
+                    🗺️
+                </a>
+            `;
+        }
 
         const entry = document.createElement('div');
         entry.className = 'colinha-item';
         entry.innerHTML = `
             <div class="colinha-content-item">
-                <p><strong>Placa:</strong> ${manutencao.placa || 'N/A'}</p>
-                <p><strong>Motorista:</strong> ${manutencao.motorista || 'N/A'} - <strong>Tipo:</strong> ${manutencao.tipo || 'N/A'}</p>
-                <p><strong>Valor total:</strong> ${formatarMoeda(Number(manutencao.valor || 0))}</p>
-                <p><strong>CHAVE PIX:</strong> ${manutencao.pix || 'N/A'} ${manutencao.favorecido || ''}</p>
-                <p><strong>OC:</strong> ${manutencao.oc || 'N/A'}</p>
-                <p><strong>Local:</strong> ${manutencao.local || 'N/A'}</p>
-                <p><strong>Defeito/Serviços:</strong> ${manutencao.defeito || 'N/A'}</p>
+                <p><strong>Placa:</strong> ${man.placa || 'N/A'}</p>
+                <p><strong>Motorista:</strong> ${man.motorista || 'N/A'} - <strong>Tipo:</strong> ${man.tipo || 'N/A'}</p>
+                <p><strong>Valor total:</strong> ${formatarMoeda(Number(man.valor || 0))}</p>
+                <p><strong>CHAVE PIX:</strong> ${man.pix || 'N/A'} ${man.favorecido || ''}</p>
+                <p><strong>OC:</strong> ${man.oc || 'N/A'}</p>
+                <p>
+                    <strong>Local:</strong> ${man.local || 'N/A'}
+                    ${mapaLink}
+                </p>
+                <p><strong>Defeito/Serviços:</strong> ${man.defeito || 'N/A'}</p>
             </div>
             <button class="botao-copiar" data-texto="${entryText}">📋</button>
         `;

@@ -376,15 +376,16 @@ function criarModalCadastro(tipo, coordenadas) {
                    placeholder="(00) 00000-0000">
           </div>
           ${!isBase ? `
-          <div style="width: 100px;">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Avaliação</label>
+          <div style="width: 150px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nível de Preço</label>
             <select name="avaliacao" 
-                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
-              <option value="5">⭐⭐⭐⭐⭐</option>
-              <option value="4">⭐⭐⭐⭐</option>
-              <option value="3">⭐⭐⭐</option>
-              <option value="2">⭐⭐</option>
-              <option value="1">⭐</option>
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;"
+                    title="Use as estrelas para classificar o preço. Mais estrelas = mais barato.">
+              <option value="5">⭐⭐⭐⭐⭐ (Muito Barato)</option>
+              <option value="4">⭐⭐⭐⭐ (Barato)</option>
+              <option value="3" selected>⭐⭐⭐ (Normal)</option>
+              <option value="2">⭐⭐ (Caro)</option>
+              <option value="1">⭐ (Muito Caro)</option>
             </select>
           </div>
           ` : ''}
@@ -456,7 +457,7 @@ function salvarCadastro(tipo, form) {
     dados.tipo = formData.get('tipo');
     dados.servicos = formData.get('servicos') ? 
       formData.get('servicos').split(',').map(s => s.trim()).filter(s => s) : [];
-    dados.avaliacao = parseFloat(formData.get('avaliacao')) || 5;
+    dados.avaliacao = parseFloat(formData.get('avaliacao')) || 3; // Default para 3 (Normal)
     prestadores.push(dados);
     console.log('Novo prestador cadastrado:', dados);
   }
@@ -832,7 +833,18 @@ function criarPopupUnidade(unidade) {
  * Cria conteúdo HTML do popup para prestadores
  */
 function criarPopupPrestador(prestador) {
-  const estrelas = '⭐'.repeat(Math.floor(prestador.avaliacao || 5));
+  const avaliacaoPadrao = 3; // Preço Normal
+  const avaliacao = prestador.avaliacao || avaliacaoPadrao;
+  const estrelas = '⭐'.repeat(Math.floor(avaliacao));
+  const nivelPrecoMap = {
+    5: 'Muito Barato',
+    4: 'Barato',
+    3: 'Preço Normal',
+    2: 'Caro',
+    1: 'Muito Caro'
+  };
+  const descricaoPreco = nivelPrecoMap[avaliacao];
+
   return `
     <div style="min-width: 280px;">
       <h4 style="margin: 0 0 10px 0; color: #28a745;">${prestador.nome}</h4>
@@ -841,7 +853,7 @@ function criarPopupPrestador(prestador) {
       ${prestador.servicos && prestador.servicos.length > 0 ? 
         `<p style="margin: 5px 0;"><strong>⚙️ Serviços:</strong> ${prestador.servicos.join(', ')}</p>` : ''}
       ${prestador.telefone ? `<p style="margin: 5px 0;"><strong>📱 Telefone:</strong> ${prestador.telefone}</p>` : ''}
-      <p style="margin: 5px 0;"><strong>⭐ Avaliação:</strong> ${prestador.avaliacao || 5} ${estrelas}</p>
+      <p style="margin: 5px 0;" title="${descricaoPreco}"><strong>💰 Nível de Preço:</strong> ${estrelas}</p>
       ${prestador.observacoes ? `<p style="margin: 5px 0;"><strong>📝 Obs:</strong> ${prestador.observacoes}</p>` : ''}
       <div style="margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap;">
         <button onclick="criarRota(${prestador.id})" 
@@ -1068,15 +1080,16 @@ function criarModalEdicao(tipo, item) {
                    placeholder="(00) 00000-0000">
           </div>
           ${!isBase ? `
-          <div style="width: 100px;">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Avaliação</label>
+          <div style="width: 150px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nível de Preço</label>
             <select name="avaliacao" 
-                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
-              <option value="5" ${item.avaliacao === 5 ? 'selected' : ''}>⭐⭐⭐⭐⭐</option>
-              <option value="4" ${item.avaliacao === 4 ? 'selected' : ''}>⭐⭐⭐⭐</option>
-              <option value="3" ${item.avaliacao === 3 ? 'selected' : ''}>⭐⭐⭐</option>
-              <option value="2" ${item.avaliacao === 2 ? 'selected' : ''}>⭐⭐</option>
-              <option value="1" ${item.avaliacao === 1 ? 'selected' : ''}>⭐</option>
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;"
+                    title="Use as estrelas para classificar o preço. Mais estrelas = mais barato.">
+              <option value="5" ${item.avaliacao == 5 ? 'selected' : ''}>⭐⭐⭐⭐⭐ (Muito Barato)</option>
+              <option value="4" ${item.avaliacao == 4 ? 'selected' : ''}>⭐⭐⭐⭐ (Barato)</option>
+              <option value="3" ${item.avaliacao == 3 ? 'selected' : ''}>⭐⭐⭐ (Normal)</option>
+              <option value="2" ${item.avaliacao == 2 ? 'selected' : ''}>⭐⭐ (Caro)</option>
+              <option value="1" ${item.avaliacao == 1 ? 'selected' : ''}>⭐ (Muito Caro)</option>
             </select>
           </div>
           ` : ''}
@@ -1141,7 +1154,7 @@ function salvarEdicao(tipo, form) {
     dadosAtualizados.tipo = formData.get('tipo');
     dadosAtualizados.servicos = formData.get('servicos') ? 
       formData.get('servicos').split(',').map(s => s.trim()).filter(s => s) : [];
-    dadosAtualizados.avaliacao = parseFloat(formData.get('avaliacao')) || 5;
+    dadosAtualizados.avaliacao = parseFloat(formData.get('avaliacao')) || 3;
     
     const index = prestadores.findIndex(p => p.id === id);
     if (index !== -1) {
@@ -1402,16 +1415,16 @@ export function gerarRelatorio() {
   }, {});
   
   // Calcula média de avaliações
-  const avaliacoes = prestadores.filter(p => p.avaliacao).map(p => p.avaliacao);
-  const mediaAvaliacoes = avaliacoes.length > 0 ? 
-    (avaliacoes.reduce((a, b) => a + b, 0) / avaliacoes.length).toFixed(1) : 0;
+  const avaliacoesPreco = prestadores.filter(p => p.avaliacao).map(p => p.avaliacao);
+  const mediaNivelPreco = avaliacoesPreco.length > 0 ? 
+    (avaliacoesPreco.reduce((a, b) => a + b, 0) / avaliacoesPreco.length).toFixed(1) : 0;
 
   const relatorio = {
     dataGeracao: new Date().toLocaleString('pt-BR'),
     resumo: {
       totalUnidades,
       totalPrestadores,
-      mediaAvaliacoes: parseFloat(mediaAvaliacoes)
+      mediaNivelPreco: parseFloat(mediaNivelPreco)
     },
     prestadoresPorTipo,
     prestadoresPorEstado,
@@ -1536,8 +1549,8 @@ export function obterEstatisticas() {
       }, {}),
       comTelefone: prestadores.filter(p => p.telefone).length,
       comServicos: prestadores.filter(p => p.servicos && p.servicos.length > 0).length,
-      avaliacaoMedia: prestadores.length > 0 ? 
-        (prestadores.reduce((sum, p) => sum + (p.avaliacao || 5), 0) / prestadores.length).toFixed(1) : 0
+      nivelPrecoMedio: prestadores.length > 0 ? 
+        (prestadores.reduce((sum, p) => sum + (p.avaliacao || 3), 0) / prestadores.length).toFixed(1) : 0
     },
     geral: {
       totalItens: unidades.length + prestadores.length,
