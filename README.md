@@ -24,11 +24,11 @@ Sistema completo de controle de manutenções veiculares com dashboard interativ
 - **Estatísticas avançadas**: Insights sobre padrões de manutenção
 - **Colinha rápida**: Para cópia de informações essenciais
 
-### 🗺️ Mapa Interativo de Prestadores
-- **Cadastro Georreferenciado**: Adicione "Bases" e "Prestadores de Serviço" diretamente no mapa.
-- **Persistência Local**: Os dados do mapa são salvos no `localStorage` do seu navegador, independentes do banco de dados principal.
-- **Filtros Avançados**: Filtre prestadores por tipo, raio de distância de uma base e busca textual.
-- **Ferramentas de Gestão**: Exporte/importe seus dados do mapa em formato JSON, gere relatórios e valide a integridade dos dados.
+### 🗺️ Mapa Interativo de Locais
+- **Visualização Georreferenciada**: Exibe no mapa os locais onde as manutenções foram realizadas, agrupando por localidade.
+- **Cadastro de Pontos de Interesse**: Permite cadastrar, editar e remover locais personalizados, como "Bases" e "Prestadores de Serviço", com informações detalhadas (endereço, telefone, serviços, etc.).
+- **Persistência no Banco de Dados**: Todos os locais personalizados são salvos de forma segura no banco de dados da aplicação (tabela `mapa_locais`), garantindo que a informação seja centralizada e consistente.
+- **Filtros Dinâmicos**: Permite buscar e filtrar os locais no mapa por nome, cidade ou tipo.
 
 ### 🎨 Design Moderno
 - **Estilo Power BI**: Cores vibrantes, gradientes e cards elegantes
@@ -74,7 +74,7 @@ dashboard_manutencoes_evoluido/
 │ ├── ui.js # Módulo para manipulação da interface do usuário (DOM)
 │ ├── charts.js # Módulo para gerenciamento dos gráficos
 │ ├── utils.js # Módulo com funções utilitárias
-│ └── maps.js # Módulo completo para o mapa interativo de prestadores
+│ └── map.js # Módulo para o mapa interativo de prestadores
 └── README.md # Esta documentação
 ```
 

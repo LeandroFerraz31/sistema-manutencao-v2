@@ -2,7 +2,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import * as charts from './charts.js';
 import * as utils from './utils.js';
-import * as maps from './maps.js';
+import * as map from './map.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- STATE ---
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.mostrarSecao(sectionId, sections, navLinks);
 
         if (sectionId === 'mapa') {
-            maps.inicializarMapa(); // 👈 ativa o mapa só quando a aba for clicada
+            map.inicializarMapa(); // 👈 ativa o mapa só quando a aba for clicada
         }
     });
 });
