@@ -212,6 +212,20 @@ export function atualizarColinha(manutencoes, colinhaContent) {
             `;
         }
 
+        // Constrói os links dos anexos se houver
+        let anexosHTML = '';
+        if (man.anexos && man.anexos.length > 0) {
+            anexosHTML = man.anexos.map((anexo, index) => `
+                <a href="${anexo.dados_arquivo}" 
+                   class="anexo-link" 
+                   download="${anexo.nome_arquivo}" 
+                   title="Baixar ${anexo.nome_arquivo}"
+                   style="right: ${70 + (index * 40)}px;">
+                    📎
+                </a>
+            `).join('');
+        }
+
         const entry = document.createElement('div');
         entry.className = 'colinha-item';
         entry.innerHTML = `
@@ -227,6 +241,8 @@ export function atualizarColinha(manutencoes, colinhaContent) {
                 </p>
                 <p><strong>Defeito/Serviços:</strong> ${man.defeito || 'N/A'}</p>
             </div>
+            
+            ${anexosHTML}
             <button class="botao-copiar" data-texto="${entryText}">📋</button>
         `;
         colinhaContent.appendChild(entry);
@@ -247,6 +263,24 @@ export function preencherFormularioEdicao(manutencao, formEditar, modal) {
     formEditar.querySelector('#edit-local').value = manutencao.local;
     formEditar.querySelector('#edit-defeito').value = manutencao.defeito;
     formEditar.querySelector('input[name="id"]').value = manutencao.id;
+
+    // Lida com o anexo
+    const anexoAtualContainer = formEditar.querySelector('#anexo-atual-container');
+    anexoAtualContainer.innerHTML = '';
+
+    if (manutencao.anexos && manutencao.anexos.length > 0) {
+        const linksHTML = manutencao.anexos.map(anexo => `
+            <div class="anexo-item-atual">
+                <a href="${anexo.dados_arquivo}" target="_blank" class="link-anexo-atual" download="${anexo.nome_arquivo}">
+                    ${anexo.nome_arquivo}
+                </a>
+            </div>
+        `).join('');
+        anexoAtualContainer.innerHTML = linksHTML;
+    } else {
+        anexoAtualContainer.innerHTML = '<p><em>Nenhum anexo existente.</em></p>';
+    }
+
     if (modal) modal.style.display = 'flex';
 }
 

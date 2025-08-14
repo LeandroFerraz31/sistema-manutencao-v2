@@ -7,6 +7,18 @@ let unidades = [];
 let prestadores = [];
 let geocoder;
 
+// Mapeia os valores internos para nomes amigáveis
+const tipoServicoNomes = {
+  borracharia: 'Borracharia',
+  oficina: 'Oficina Mecânica',
+  eletrica: 'Elétrica',
+  chapeacao: 'Chapeação',
+  pintura: 'Pintura',
+  lavagem: 'Lavagem',
+  tacografo: 'Aferição de Tacógrafo',
+  fornecedor: 'Fornecedor'
+};
+
 // Ícones personalizados para diferentes tipos
 const icones = {
   unidade: L.divIcon({
@@ -51,6 +63,12 @@ const icones = {
     iconSize: [25, 25],
     iconAnchor: [12, 12]
   }),
+  tacografo: L.divIcon({
+    className: 'custom-div-icon',
+    html: '<div style="background: #795548; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">⏱️</div>',
+    iconSize: [25, 25],
+    iconAnchor: [12, 12]
+  }),
   fornecedor: L.divIcon({
     className: 'custom-div-icon',
     html: '<div style="background: #607D8B; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">📦</div>',
@@ -65,15 +83,39 @@ const icones = {
 export function inicializarMapa() {
   const mapaContainer = document.getElementById('mapa-container');
   if (!mapaContainer || mapa) return;
-
-  // Cria o mapa centrado no Brasil
-  mapa = L.map('mapa-container').setView([-14.2350, -51.9253], 5);
-
-  // Adiciona o tile layer do OpenStreetMap
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
+ 
+  // 1. Definir as camadas de mapa (Padrão e Satélite)
+  const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19
-  }).addTo(mapa);
+  });
+
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 19
+  });
+
+  // Nova camada Híbrida (Satélite com Rodovias e Rótulos) do Google
+  const googleHybridLayer = L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',{
+      maxZoom: 20,
+      subdomains:['mt0','mt1','mt2','mt3'],
+      attribution: 'Map data &copy; Google'
+  });
+
+  // 2. Criar o objeto do mapa, definindo a camada padrão
+  mapa = L.map('mapa-container', {
+    center: [-14.2350, -51.9253], // Centro do Brasil
+    zoom: 5,
+    layers: [googleHybridLayer] // A camada Híbrida será a inicial
+  });
+
+  // 3. Adicionar o controle de camadas ao mapa
+  const baseMaps = {
+    "Híbrido (Satélite + Rodovias)": googleHybridLayer,
+    "Padrão": osmLayer,
+    "Satélite (Puro)": satelliteLayer
+  };
+  L.control.layers(baseMaps).addTo(mapa);
 
   // Cria layer para markers
   markersLayer = L.layerGroup().addTo(mapa);
@@ -140,6 +182,7 @@ function configurarInterfaceCadastro() {
               <option value="chapeacao">Chapeação</option>
               <option value="pintura">Pintura</option>
               <option value="lavagem">Lavagem</option>
+              <option value="tacografo">Aferição de Tacógrafo</option>
               <option value="fornecedor">Fornecedor</option>
             </select>
             <select id="filtro-raio" style="padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
@@ -352,6 +395,7 @@ function criarModalCadastro(tipo, coordenadas) {
             <option value="chapeacao">Chapeação</option>
             <option value="pintura">Pintura</option>
             <option value="lavagem">Lavagem</option>
+            <option value="tacografo">Aferição de Tacógrafo</option>
             <option value="fornecedor">Fornecedor</option>
           </select>
         </div>
@@ -779,7 +823,7 @@ function criarPopupUnidade(unidade) {
  * Cria conteúdo HTML do popup para prestadores
  */
 function criarPopupPrestador(prestador) {
-  const avaliacaoPadrao = 3; // Preço Normal
+  const avaliacaoPadrao = 3; // Preço Normal 
   const avaliacao = prestador.avaliacao || avaliacaoPadrao;
   const estrelas = '⭐'.repeat(Math.floor(avaliacao));
   const nivelPrecoMap = {
@@ -790,12 +834,13 @@ function criarPopupPrestador(prestador) {
     1: 'Muito Caro'
   };
   const descricaoPreco = nivelPrecoMap[avaliacao];
+  const nomeTipo = tipoServicoNomes[prestador.tipo] || (prestador.tipo.charAt(0).toUpperCase() + prestador.tipo.slice(1));
 
   return `
     <div style="min-width: 280px;">
       <h4 style="margin: 0 0 10px 0; color: #28a745;">${prestador.nome}</h4>
-      <p style="margin: 5px 0;"><strong>📍 Endereço:</strong> ${prestador.endereco}</p>
-      <p style="margin: 5px 0;"><strong>🔧 Tipo:</strong> ${prestador.tipo.charAt(0).toUpperCase() + prestador.tipo.slice(1)}</p>
+      <p style="margin: 5px 0;"><strong>📍 Endereço:</strong> ${prestador.endereco}</p> 
+      <p style="margin: 5px 0;"><strong>🔧 Tipo:</strong> ${nomeTipo}</p>
       ${prestador.servicos && prestador.servicos.length > 0 ? 
         `<p style="margin: 5px 0;"><strong>⚙️ Serviços:</strong> ${prestador.servicos.join(', ')}</p>` : ''}
       ${prestador.telefone ? `<p style="margin: 5px 0;"><strong>📱 Telefone:</strong> ${prestador.telefone}</p>` : ''}
@@ -1000,6 +1045,7 @@ function criarModalEdicao(tipo, item) {
             <option value="chapeacao" ${item.tipo === 'chapeacao' ? 'selected' : ''}>Chapeação</option>
             <option value="pintura" ${item.tipo === 'pintura' ? 'selected' : ''}>Pintura</option>
             <option value="lavagem" ${item.tipo === 'lavagem' ? 'selected' : ''}>Lavagem</option>
+            <option value="tacografo" ${item.tipo === 'tacografo' ? 'selected' : ''}>Aferição de Tacógrafo</option>
             <option value="fornecedor" ${item.tipo === 'fornecedor' ? 'selected' : ''}>Fornecedor</option>
           </select>
         </div>
@@ -1535,7 +1581,7 @@ export function validarDados() {
     if (!prestador.estado || prestador.estado.length !== 2) {
       erros.push(`Prestador ${index + 1} (${prestador.nome}): Estado inválido`);
     }
-    if (!prestador.tipo || !['borracharia', 'oficina', 'eletrica', 'chapeacao', 'pintura', 'lavagem', 'fornecedor'].includes(prestador.tipo)) {
+    if (!prestador.tipo || !['borracharia', 'oficina', 'eletrica', 'chapeacao', 'pintura', 'lavagem', 'tacografo', 'fornecedor'].includes(prestador.tipo)) {
       erros.push(`Prestador ${index + 1} (${prestador.nome}): Tipo de serviço inválido`);
     }
     if (prestador.avaliacao && (prestador.avaliacao < 1 || prestador.avaliacao > 5)) {

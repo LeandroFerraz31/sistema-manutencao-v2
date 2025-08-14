@@ -174,6 +174,7 @@ Este projeto foi desenvolvido com foco em manutenibilidade, escalabilidade e uma
 - ✅ Rankings dinâmicos
 - ✅ Design responsivo
 - ✅ Animações e transições suaves
+- ✅ Anexo de notas fiscais (imagem ou PDF)
 - ✅ Notificações de feedback
 
 ### UX/UI

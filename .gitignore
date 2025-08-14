@@ -1,14 +1,15 @@
-# Arquivo de banco de dados SQLite
-*.db
-*.db-journal
-
-# Arquivos de cache e compilados do Python
+# Arquivos de Bytecode e Cache do Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# Ambientes virtuais
-venv/
-.venv/
-
-# Arquivos de configuração de IDEs
+# Pasta de configurações do VSCode
 .vscode/
+
+# Banco de dados local
+# É uma boa prática não versionar o arquivo do banco de dados,
+# pois ele muda constantemente e pode causar conflitos.
+# O banco será criado automaticamente na primeira execução.
+manutencoes.db
+manutencoes.db-journal

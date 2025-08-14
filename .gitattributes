@@ -1,0 +1,4 @@
+# Define o comportamento padrão para todos os arquivos de texto.
+# Git irá normalizar os finais de linha para LF no repositório
+# e converter para o final de linha nativo do sistema operacional no checkout.
+* text=auto

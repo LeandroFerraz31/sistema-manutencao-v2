@@ -43,6 +43,7 @@
                     <li><a href="#colinha" data-section="colinha">📝 Colinha</a></li>
                     <li><a href="#mapa" data-section="mapa">🗺️ Mapa de Locais</a></li>
                     <li><a href="#" data-section="dashboard">🚧 Em Construção</a></li>
+                    <li><a href="#" data-section="dashboard">🚧 Em Construção</a></li>
                 </ul>
             </aside>
 
@@ -228,6 +229,14 @@
                                     required></textarea>
                             </div>
                         </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="anexo_nota">Anexos (Imagens ou PDFs)</label>
+                                <input type="file" id="anexo_nota" name="anexo_nota" accept="image/*,application/pdf" multiple>
+                                <div id="lista-arquivos-selecionados" class="lista-arquivos"></div>
+                                <span class="field-note">Anexe uma ou mais imagens ou PDFs da nota fiscal.</span>
+                            </div>
+                        </div>
                         <div class="form-actions">
                             <button type="submit" class="btn-primary">💾 Salvar Manutenção</button>
                             <button type="reset" class="btn-secondary">🔄 Limpar Formulário</button>
@@ -354,7 +363,7 @@
                     <h2 class="title">🗺️ Mapa de Locais</h2>
                     <input type="text" id="filtro-mapa" placeholder="Buscar por cidade, tipo ou nome..."
                         class="filter-input" />
-                    <div id="mapa-container" style="height: 500px; margin-top: 1rem; border-radius: 12px;"></div>
+                    <div id="mapa-container" style="height: 60vh; border-radius: 12px; box-shadow: var(--shadow-md); margin-top: 1rem;"></div>
                 </section>
 
             </main>
@@ -440,6 +449,17 @@
                     <div class="form-group">
                         <label for="edit-defeito">Defeito *</label>
                         <textarea id="edit-defeito" name="defeito" required></textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-anexo_nota">Novos Anexos</label>
+                        <input type="file" id="edit-anexo_nota" name="anexo_nota" accept="image/*,application/pdf" multiple>
+                        <div id="edit-lista-arquivos-selecionados" class="lista-arquivos"></div>
+                        <span class="field-note">Anexe novos arquivos. Os anexos atuais serão substituídos.</span>
+                        <label style="margin-top: 1rem;">Anexos Atuais:</label>
+                        <div id="anexo-atual-container" class="lista-arquivos">
+                        </div>
                     </div>
                 </div>
                 <div class="form-actions">

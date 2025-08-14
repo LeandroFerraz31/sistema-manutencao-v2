@@ -58,11 +58,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await api.carregarManutencoesAPI();
             console.log('Dados brutos da API:', data);
 
-            manutencoes = data.reverse().filter(man => {
+            let manutencoesTemp = data.filter(man => {
                 const isValid = man.data && man.placa && man.motorista && man.tipo && man.local && man.defeito;
                 if (!isValid) console.warn('Manutenção com dados incompletos descartada:', man);
                 return isValid;
             });
+
+            // Força a ordenação no frontend para garantir o comportamento desejado.
+            // Ordena por data (mais nova primeiro) e depois por ID (mais novo primeiro).
+            manutencoesTemp.sort((a, b) => {
+                const dateComparison = b.data.localeCompare(a.data);
+                if (dateComparison !== 0) {
+                    return dateComparison;
+                }
+                return b.id - a.id;
+            });
+
+            manutencoes = manutencoesTemp;
 
             if (manutencoes.length === 0) {
                 ui.mostrarNotificacao('Nenhuma manutenção encontrada no banco de dados.', 'info', 10000);
@@ -203,7 +215,22 @@ document.addEventListener('DOMContentLoaded', () => {
         formCadastrar.addEventListener('submit', async (e) => {
             e.preventDefault();
             ui.showLoader(loaderOverlay, 'Salvando manutenção...');
+ 
             const formData = new FormData(formCadastrar);
+            const anexoInput = formCadastrar.querySelector('#anexo_nota');
+            const anexoFiles = anexoInput.files;
+            
+            // Converte todos os arquivos selecionados para Base64 em paralelo
+            const anexoPromises = Array.from(anexoFiles).map(file => {
+                return utils.fileToBase64(file).then(base64 => ({
+                    nome: file.name,
+                    tipo: file.type,
+                    dados: base64
+                }));
+            });
+
+            const anexos = await Promise.all(anexoPromises);
+
             const manutencao = {
                 data: formData.get('data'),
                 placa: formData.get('placa').toUpperCase().trim(),
@@ -215,7 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 pix: formData.get('pix') || '',
                 favorecido: formData.get('favorecido') || '',
                 local: formData.get('local').trim(),
-                defeito: formData.get('defeito').trim()
+                defeito: formData.get('defeito').trim(),
+                anexos: anexos // Envia a lista de anexos
             };
 
             try {
@@ -223,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await api.cadastrarManutencaoAPI(manutencao);
                 ui.mostrarNotificacao('Manutenção cadastrada com sucesso!', 'success');
                 formCadastrar.reset();
+                anexoInput.value = ''; // Limpa o campo de arquivo
                 carregarDadosIniciais();
             } catch (error) {
                 console.error('Erro ao cadastrar manutenção:', error);
@@ -237,7 +266,22 @@ document.addEventListener('DOMContentLoaded', () => {
         formEditar.addEventListener('submit', async (e) => {
             e.preventDefault();
             ui.showLoader(loaderOverlay, 'Atualizando manutenção...');
+
             const formData = new FormData(formEditar);
+            const anexoInput = formEditar.querySelector('#edit-anexo_nota');
+            const anexoFiles = anexoInput.files;
+
+            // Converte todos os novos arquivos selecionados para Base64
+            const anexoPromises = Array.from(anexoFiles).map(file => {
+                return utils.fileToBase64(file).then(base64 => ({
+                    nome: file.name,
+                    tipo: file.type,
+                    dados: base64
+                }));
+            });
+
+            const novosAnexos = await Promise.all(anexoPromises);
+
             const manutencao = {
                 id: formData.get('id'),
                 data: formData.get('data'),
@@ -250,7 +294,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 pix: formData.get('pix') || '',
                 favorecido: formData.get('favorecido') || '',
                 local: formData.get('local').trim(),
-                defeito: formData.get('defeito').trim()
+                defeito: formData.get('defeito').trim(),
+                // A lógica do backend é de substituição total.
+                // Se o usuário não selecionar novos arquivos, a lista de anexos será vazia, e o backend removerá todos os anexos existentes.
+                anexos: novosAnexos
             };
 
             try {
@@ -258,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await api.atualizarManutencaoAPI(manutencao);
                 ui.mostrarNotificacao('Manutenção atualizada com sucesso!', 'success');
                 if (modal) modal.style.display = 'none';
+                anexoInput.value = ''; // Limpa o campo de arquivo
                 carregarDadosIniciais();
             } catch (error) {
                 console.error('Erro ao atualizar manutenção:', error);

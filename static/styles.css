@@ -942,6 +942,69 @@ tr:hover {
     transition: all var(--transition-normal);
 }
 
+.anexo-link {
+    position: absolute;
+    top: 12px;
+    right: 70px; /* Posicionado à esquerda do botão de copiar */
+    width: 32px;
+    height: 32px;
+    background: #e9ecef; /* Fundo cinza claro */
+    border-radius: 50%; /* Deixa o fundo circular */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 1.2rem; /* Ajusta o tamanho do ícone */
+    color: var(--text-secondary);
+    transition: all var(--transition-normal);
+}
+
+.anexo-link:hover {
+    transform: scale(1.1);
+    background: var(--primary-blue);
+    color: var(--text-white);
+    box-shadow: var(--shadow-sm);
+}
+
+.form-group input[type="file"] {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 2px dashed #e1e5e9;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+}
+
+.form-group input[type="file"]:hover {
+    border-color: var(--primary-blue);
+}
+
+.anexo-atual-container {
+    margin-top: 8px;
+}
+
+.link-anexo-atual {
+    color: var(--primary-blue);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.link-anexo-atual:hover {
+    text-decoration: underline;
+}
+
+.btn-remover-anexo {
+    margin-left: 10px;
+    color: var(--accent-red);
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    font-weight: bold;
+    padding: 0 5px;
+    line-height: 1;
+}
+
 .map-link {
     text-decoration: none;
     margin-left: 8px;
@@ -1261,6 +1324,7 @@ tr:hover {
 #mapa-container {
     height: 60vh; /* Altura relativa à viewport */
     border-radius: var(--border-radius-lg);
+    margin-top: 1rem;
     box-shadow: var(--shadow-md);
 }
 /* Estilos do Footer */

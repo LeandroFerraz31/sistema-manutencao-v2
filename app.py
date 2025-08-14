@@ -29,6 +29,12 @@ CORS(app, resources={
     }
 })
 
+def get_db_connection():
+    """Cria uma conexão com o banco que permite acesso às colunas por nome."""
+    conn = sqlite3.connect('manutencoes.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
 # Rota de teste para verificar conectividade
 @app.route('/api/test', methods=['GET'])
 def test():
@@ -39,7 +45,8 @@ def init_db():
     try:
         if not os.path.exists('manutencoes.db'):
             logger.info("Criando novo banco de dados: manutencoes.db")
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
+        conn.execute('PRAGMA foreign_keys = ON;') # Habilita o suporte a chaves estrangeiras
         c = conn.cursor()
 
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='manutencoes'")
@@ -61,18 +68,22 @@ def init_db():
                           local TEXT,
                           defeito TEXT)''')
         else:
+            # Lógica de migração para remover colunas antigas de anexo
             c.execute("PRAGMA table_info(manutencoes)")
             columns = [column[1] for column in c.fetchall()]
             if 'telefone' not in columns:
                 logger.info("Adicionando coluna 'telefone' à tabela 'manutencoes'...")
                 c.execute('ALTER TABLE manutencoes ADD COLUMN telefone TEXT DEFAULT ""')
+            # As colunas de anexo não são mais necessárias aqui, serão removidas se existirem
+            # para simplificar, a lógica de remoção não está inclusa, mas o ideal seria removê-las.
+            # Ex: c.execute('ALTER TABLE manutencoes DROP COLUMN anexo_nota')
             if 'latitude' not in columns:
                 logger.info("Adicionando coluna 'latitude' à tabela 'manutencoes'...")
                 c.execute('ALTER TABLE manutencoes ADD COLUMN latitude REAL')
             if 'longitude' not in columns:
                 logger.info("Adicionando coluna 'longitude' à tabela 'manutencoes'...")
                 c.execute('ALTER TABLE manutencoes ADD COLUMN longitude REAL')
-
+        
         # Adiciona a tabela para os locais do mapa, se não existir
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='mapa_locais'")
         if not c.fetchone():
@@ -110,6 +121,20 @@ def init_db():
                 if col not in columns:
                     logger.info(f"Adicionando coluna '{col}' à tabela 'mapa_locais'...")
                     c.execute(f'ALTER TABLE mapa_locais ADD COLUMN {col} {tipo}')
+        
+        # Adiciona a tabela para os anexos, se não existir
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='anexos'")
+        if not c.fetchone():
+            logger.info("Criando tabela 'anexos' para múltiplos arquivos...")
+            c.execute('''CREATE TABLE anexos
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          manutencao_id INTEGER NOT NULL,
+                          nome_arquivo TEXT NOT NULL,
+                          tipo_arquivo TEXT NOT NULL,
+                          dados_arquivo TEXT NOT NULL, -- Armazena como Base64
+                          FOREIGN KEY (manutencao_id) REFERENCES manutencoes (id) ON DELETE CASCADE
+                         )''')
+
 
         # Verificar registros existentes
         c.execute("SELECT COUNT(*) FROM manutencoes")
@@ -161,15 +186,31 @@ def add_manutencao():
             logger.warning(f"Não foi possível converter a data fornecida: '{data['data']}'")
             return jsonify({'error': f"Não foi possível converter a data fornecida: '{data['data']}'."}), 400
 
-        conn = sqlite3.connect('manutencoes.db')
-        c = conn.cursor()
-        c.execute('''INSERT INTO manutencoes (data, placa, motorista, telefone, tipo, oc, valor, pix, favorecido, local, defeito, latitude, longitude)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        conn = get_db_connection()
+        conn.execute('PRAGMA foreign_keys = ON;')
+        try:
+            conn.execute('BEGIN') # Inicia uma transação
+            c = conn.cursor()
+            c.execute('''INSERT INTO manutencoes (data, placa, motorista, telefone, tipo, oc, valor, pix, favorecido, local, defeito, latitude, longitude)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (data['data'], data['placa'].upper(), data['motorista'], data.get('telefone', ''), data['tipo'], data.get('oc', ''),
                    valor, data.get('pix', ''), data.get('favorecido', ''), data['local'], data['defeito'],
                    data.get('latitude'), data.get('longitude')))
-        conn.commit()
-        conn.close()
+            
+            manutencao_id = c.lastrowid
+            anexos = data.get('anexos', []) # Espera uma lista de anexos
+            for anexo in anexos:
+                c.execute('''INSERT INTO anexos (manutencao_id, nome_arquivo, tipo_arquivo, dados_arquivo)
+                             VALUES (?, ?, ?, ?)''',
+                          (manutencao_id, anexo.get('nome'), anexo.get('tipo'), anexo.get('dados')))
+
+            conn.commit() # Confirma a transação
+        except Exception:
+            conn.rollback() # Desfaz em caso de erro
+            raise
+        finally:
+            conn.close()
+
         logger.info("Manutenção adicionada com sucesso")
         return jsonify({'message': 'Manutenção adicionada com sucesso'}), 201
     except ValueError:
@@ -183,38 +224,39 @@ def add_manutencao():
 def get_manutencoes():
     try:
         telefone_filtro = request.args.get('telefone', '').strip()
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
         c = conn.cursor()
 
         if telefone_filtro:
             logger.debug(f"Filtrando manutenções por telefone: {telefone_filtro}")
-            c.execute('SELECT * FROM manutencoes WHERE telefone LIKE ?', (f'%{telefone_filtro}%',))
+            c.execute('SELECT * FROM manutencoes WHERE telefone LIKE ? ORDER BY substr(data, 7, 4) DESC, substr(data, 4, 2) DESC, substr(data, 1, 2) DESC, id DESC', (f'%{telefone_filtro}%',))
         else:
             logger.debug("Recuperando todas as manutenções")
-            c.execute('SELECT * FROM manutencoes')
+            c.execute('SELECT * FROM manutencoes ORDER BY substr(data, 7, 4) DESC, substr(data, 4, 2) DESC, substr(data, 1, 2) DESC, id DESC')
 
-        rows = c.fetchall()
-        logger.debug(f"Registros brutos recuperados do banco: {rows}")
+        manutencoes_rows = c.fetchall()
+        manutencoes = [dict(row) for row in manutencoes_rows] # Lista de manutenções já ordenada
+        manutencao_ids = [m['id'] for m in manutencoes]
 
-        manutencoes = []
-        for row in rows:
-            manutencao = {
-                'id': row[0],
-                'data': row[1] or '',
-                'placa': row[2] or '',
-                'motorista': row[3] or '',
-                'telefone': row[4] or '',
-                'tipo': row[5] or '',
-                'oc': row[6] or '',
-                'valor': row[7] if row[7] is not None else 0.0,
-                'pix': row[8] or '',
-                'favorecido': row[9] or '',
-                'local': row[10] or '',
-                'defeito': row[11] or '',
-                'latitude': row[12],
-                'longitude': row[13]
-            }
-            manutencoes.append(manutencao)
+        # Busca todos os anexos para as manutenções listadas de uma só vez (mais eficiente)
+        if manutencao_ids:
+            placeholders = ','.join('?' for _ in manutencao_ids)
+            query_anexos = f"SELECT id, manutencao_id, nome_arquivo, tipo_arquivo, dados_arquivo FROM anexos WHERE manutencao_id IN ({placeholders})"
+            c.execute(query_anexos, manutencao_ids)
+            anexos_rows = c.fetchall()
+
+            # Mapeia os anexos para cada ID de manutenção
+            anexos_map = {}
+            for anexo in anexos_rows:
+                mid = anexo['manutencao_id']
+                if mid not in anexos_map:
+                    anexos_map[mid] = []
+                anexos_map[mid].append(dict(anexo))
+            
+            # Adiciona a lista de anexos a cada manutenção
+            for manutencao in manutencoes:
+                manutencao['anexos'] = anexos_map.get(manutencao['id'], [])
+
 
         conn.close()
         logger.info(f"Manutenções retornadas: {len(manutencoes)}")
@@ -242,15 +284,31 @@ def update_manutencao(id):
             logger.warning(f"Não foi possível converter a data fornecida: '{data['data']}'")
             return jsonify({'error': f"Não foi possível converter a data fornecida: '{data['data']}'."}), 400
 
-        conn = sqlite3.connect('manutencoes.db')
-        c = conn.cursor()
-        c.execute('''UPDATE manutencoes SET data = ?, placa = ?, motorista = ?, telefone = ?, tipo = ?, oc = ?, valor = ?, pix = ?, favorecido = ?, local = ?, defeito = ?, latitude = ?, longitude = ?
-                     WHERE id = ?''',
-                  (data['data'], data['placa'].upper(), data['motorista'], data.get('telefone', ''), data['tipo'], data.get('oc', ''),
-                   valor, data.get('pix', ''), data.get('favorecido', ''), data['local'], data['defeito'],
-                   data.get('latitude'), data.get('longitude'), id))
-        conn.commit()
-        conn.close()
+        conn = get_db_connection()
+        conn.execute('PRAGMA foreign_keys = ON;')
+        try:
+            conn.execute('BEGIN') # Inicia uma transação
+            c = conn.cursor()
+            c.execute('''UPDATE manutencoes SET data = ?, placa = ?, motorista = ?, telefone = ?, tipo = ?, oc = ?, valor = ?, pix = ?, favorecido = ?, local = ?, defeito = ?, latitude = ?, longitude = ?
+                         WHERE id = ?''',
+                      (data['data'], data['placa'].upper(), data['motorista'], data.get('telefone', ''), data['tipo'], data.get('oc', ''),
+                       valor, data.get('pix', ''), data.get('favorecido', ''), data['local'], data['defeito'],
+                       data.get('latitude'), data.get('longitude'), id))
+            
+            # Remove anexos antigos e insere os novos
+            c.execute('DELETE FROM anexos WHERE manutencao_id = ?', (id,))
+            anexos = data.get('anexos', [])
+            for anexo in anexos:
+                c.execute('''INSERT INTO anexos (manutencao_id, nome_arquivo, tipo_arquivo, dados_arquivo)
+                             VALUES (?, ?, ?, ?)''',
+                          (id, anexo.get('nome'), anexo.get('tipo'), anexo.get('dados')))
+            conn.commit() # Confirma a transação
+        except Exception:
+            conn.rollback() # Desfaz em caso de erro
+            raise
+        finally:
+            conn.close()
+
         logger.info(f"Manutenção {id} atualizada com sucesso")
         return jsonify({'message': 'Manutenção atualizada com sucesso'})
     except ValueError:
@@ -263,7 +321,8 @@ def update_manutencao(id):
 @app.route('/api/manutencoes/<int:id>', methods=['DELETE'])
 def delete_manutencao(id):
     try:
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
+        conn.execute('PRAGMA foreign_keys = ON;') # Garante que o ON DELETE CASCADE funcione
         c = conn.cursor()
         c.execute('DELETE FROM manutencoes WHERE id = ?', (id,))
         if c.rowcount == 0:
@@ -281,7 +340,7 @@ def delete_manutencao(id):
 @app.route('/api/estatisticas/motoristas', methods=['GET'])
 def get_ranking_motoristas():
     try:
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute('''SELECT motorista, COUNT(*) as total_manutencoes, SUM(valor) as valor_total
                      FROM manutencoes
@@ -289,12 +348,7 @@ def get_ranking_motoristas():
                      ORDER BY total_manutencoes DESC, valor_total DESC
                      LIMIT 5''')
         motoristas = []
-        for row in c.fetchall():
-            motoristas.append({
-                'motorista': row[0] or 'Desconhecido',
-                'total_manutencoes': row[1],
-                'valor_total': row[2] if row[2] is not None else 0.0
-            })
+        motoristas = [dict(row) for row in c.fetchall()]
         conn.close()
         logger.info(f"Ranking de motoristas retornado: {len(motoristas)} motoristas")
         return jsonify(motoristas)
@@ -305,7 +359,7 @@ def get_ranking_motoristas():
 @app.route('/api/estatisticas/veiculos', methods=['GET'])
 def get_ranking_veiculos():
     try:
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute('''SELECT placa, COUNT(*) as total_manutencoes, SUM(valor) as valor_total
                      FROM manutencoes
@@ -313,12 +367,7 @@ def get_ranking_veiculos():
                      ORDER BY total_manutencoes DESC, valor_total DESC
                      LIMIT 5''')
         veiculos = []
-        for row in c.fetchall():
-            veiculos.append({
-                'placa': row[0] or 'Desconhecida',
-                'total_manutencoes': row[1],
-                'valor_total': row[2] if row[2] is not None else 0.0
-            })
+        veiculos = [dict(row) for row in c.fetchall()]
         conn.close()
         logger.info(f"Ranking de veículos retornado: {len(veiculos)} veículos")
         return jsonify(veiculos)
@@ -335,7 +384,7 @@ def gerar_relatorio():
         placa = data.get('placa', '').strip()
         motorista = data.get('motorista', '').strip()
 
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
         c = conn.cursor()
 
         query = 'SELECT * FROM manutencoes WHERE data BETWEEN ? AND ?'
@@ -349,30 +398,31 @@ def gerar_relatorio():
             query += ' AND motorista = ?'
             params.append(motorista)
 
+        query += ' ORDER BY substr(data, 7, 4) DESC, substr(data, 4, 2) DESC, substr(data, 1, 2) DESC, id DESC'
+
         logger.debug(f"Executando query: {query} com parâmetros: {params}")
         c.execute(query, params)
-        rows = c.fetchall()
-        logger.debug(f"Registros brutos do relatório: {rows}")
+        manutencoes_rows = c.fetchall()
+        manutencoes = [dict(row) for row in manutencoes_rows] # Lista de manutenções já ordenada
+        manutencao_ids = [m['id'] for m in manutencoes]
 
-        manutencoes = []
-        for row in rows:
-            manutencao = {
-                'id': row[0],
-                'data': row[1] or '',
-                'placa': row[2] or '',
-                'motorista': row[3] or '',
-                'telefone': row[4] or '',
-                'tipo': row[5] or '',
-                'oc': row[6] or '',
-                'valor': row[7] if row[7] is not None else 0.0,
-                'pix': row[8] or '',
-                'favorecido': row[9] or '',
-                'local': row[10] or '',
-                'defeito': row[11] or '',
-                'latitude': row[12],
-                'longitude': row[13]
-            }
-            manutencoes.append(manutencao)
+        # Busca todos os anexos para as manutenções listadas de uma só vez
+        if manutencao_ids:
+            placeholders = ','.join('?' for _ in manutencao_ids)
+            query_anexos = f"SELECT id, manutencao_id, nome_arquivo, tipo_arquivo FROM anexos WHERE manutencao_id IN ({placeholders})"
+            c.execute(query_anexos, manutencao_ids)
+            anexos_rows = c.fetchall()
+
+            # Mapeia os anexos para cada ID de manutenção
+            anexos_map = {}
+            for anexo in anexos_rows:
+                mid = anexo['manutencao_id']
+                if mid not in anexos_map:
+                    anexos_map[mid] = []
+                anexos_map[mid].append(dict(anexo))
+            
+            for manutencao in manutencoes:
+                manutencao['anexos'] = anexos_map.get(manutencao['id'], [])
 
         conn.close()
         logger.info(f"Relatório gerado: {len(manutencoes)} manutenções")
@@ -390,7 +440,7 @@ def exportar_relatorio_excel():
         placa = data.get('placa', '').strip()
         motorista = data.get('motorista', '').strip()
 
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
         c = conn.cursor()
 
         query = 'SELECT data, placa, motorista, telefone, tipo, oc, valor, pix, favorecido, local, defeito FROM manutencoes WHERE data BETWEEN ? AND ?'
@@ -403,6 +453,8 @@ def exportar_relatorio_excel():
         if motorista:
             query += ' AND motorista = ?'
             params.append(motorista)
+
+        query += ' ORDER BY substr(data, 7, 4) DESC, substr(data, 4, 2) DESC, substr(data, 1, 2) DESC, id DESC'
 
         logger.debug(f"Executando query para exportação: {query} com parâmetros: {params}")
         df = pd.read_sql_query(query, conn, params=params)
@@ -446,8 +498,8 @@ def exportar_relatorio_excel():
 @app.route('/api/exportar_excel', methods=['GET'])
 def exportar_excel():
     try:
-        conn = sqlite3.connect('manutencoes.db')
-        query = 'SELECT * FROM manutencoes'
+        conn = get_db_connection()
+        query = 'SELECT * FROM manutencoes ORDER BY substr(data, 7, 4) DESC, substr(data, 4, 2) DESC, substr(data, 1, 2) DESC, id DESC'
         df = pd.read_sql_query(query, conn)
         conn.close()
 
@@ -499,7 +551,7 @@ def importar_excel():
             logger.warning(f"Colunas obrigatórias ausentes no Excel: {missing_columns}")
             return jsonify({'error': f'Colunas obrigatórias ausentes: {", ".join(missing_columns)}'}), 400
 
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
         c = conn.cursor()
         inserted = 0
 
@@ -541,8 +593,8 @@ def get_locais_mapa():
     total de manutenções e tipos de serviços realizados no local.
     """
     try:
-        conn = sqlite3.connect('manutencoes.db')
-        conn.row_factory = sqlite3.Row # Facilita a conversão para dict
+        conn = get_db_connection()
+        # conn.row_factory já está definido em get_db_connection
         c = conn.cursor()
 
         query = """
@@ -579,7 +631,8 @@ def add_mapa_local():
             logger.warning(f"Campos obrigatórios ausentes no cadastro do mapa: {data}")
             return jsonify({'error': 'Campos obrigatórios (nome, tipo, latitude, longitude, cidade, estado) ausentes'}), 400
 
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
+        conn.execute('PRAGMA foreign_keys = ON;')
         c = conn.cursor()
         c.execute('''INSERT INTO mapa_locais (
                         nome, tipo, latitude, longitude, endereco, cidade, estado, 
@@ -606,8 +659,7 @@ def add_mapa_local():
 def get_all_mapa_locais():
     """Retorna todas as bases e prestadores salvos no banco de dados."""
     try:
-        conn = sqlite3.connect('manutencoes.db')
-        conn.row_factory = sqlite3.Row
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute('SELECT * FROM mapa_locais')
         locais = [dict(row) for row in c.fetchall()]
@@ -629,7 +681,8 @@ def update_mapa_local(id):
             logger.warning(f"Campos obrigatórios ausentes na atualização do mapa: {data}")
             return jsonify({'error': 'Campos obrigatórios (nome, tipo, latitude, longitude, cidade, estado) ausentes'}), 400
 
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
+        conn.execute('PRAGMA foreign_keys = ON;')
         c = conn.cursor()
         c.execute('''UPDATE mapa_locais SET
                         nome = ?, tipo = ?, latitude = ?, longitude = ?, endereco = ?, cidade = ?, 
@@ -654,7 +707,8 @@ def update_mapa_local(id):
 def delete_mapa_local(id):
     """Exclui um local personalizado do mapa."""
     try:
-        conn = sqlite3.connect('manutencoes.db')
+        conn = get_db_connection()
+        conn.execute('PRAGMA foreign_keys = ON;')
         c = conn.cursor()
         c.execute('DELETE FROM mapa_locais WHERE id = ?', (id,))
         if c.rowcount == 0:
