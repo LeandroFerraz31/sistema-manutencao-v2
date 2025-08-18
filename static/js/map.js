@@ -29,7 +29,7 @@ const icones = {
   }),
   borracharia: L.divIcon({
     className: 'custom-div-icon',
-    html: '<div style="background: #2196F3; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">🛞</div>',
+    html: '<div style="background: #2196F3; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="16px" viewBox="0 0 24 24" width="16px" fill="#FFFFFF"><g><rect fill="none" height="24" width="24"/></g><g><g><path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M12,15.5c-1.93,0-3.5-1.57-3.5-3.5s1.57-3.5,3.5-3.5 s3.5,1.57,3.5,3.5S13.93,15.5,12,15.5z"/><circle cx="12" cy="12" r="2.5"/></g></g></svg></div>',
     iconSize: [25, 25],
     iconAnchor: [12, 12]
   }),
